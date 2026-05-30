@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>哈趣搜索趋势看板</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg: #f4f1ea;
+    --bg-card: #ffffff;
+    --ink: #1a1a1a;
+    --ink-soft: #5a5a5a;
+    --ink-faint: #9a9a9a;
+    --rule: #d8d2c4;
+    --accent-jd: #c8202c;
+    --accent-tm: #e85c3a;
+    --accent-2025: #b8a888;
+    --accent-2026: #1a1a1a;
+    --pos: #2e7d4f;
+    --neg: #c8202c;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Noto Serif SC', 'PingFang SC', serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.6;
+    padding: 32px 24px 64px;
+    background-image:
+      radial-gradient(circle at 20% 10%, rgba(200,32,44,0.04) 0%, transparent 40%),
+      radial-gradient(circle at 80% 60%, rgba(232,92,58,0.04) 0%, transparent 40%);
+    min-height: 100vh;
+  }
+
+  .container { max-width: 1400px; margin: 0 auto; }
+
+  header {
+    border-bottom: 2px solid var(--ink);
+    padding-bottom: 24px;
+    margin-bottom: 40px;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+
+  .title-block .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.3em;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .title-block h1 {
+    font-size: 42px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+
+  .meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-soft);
+    text-align: right;
+  }
+  .meta div { margin-bottom: 4px; }
+
+  .platform-tabs {
+    display: flex;
+    gap: 0;
+    margin-bottom: 32px;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .platform-tab {
+    background: transparent;
+    border: none;
+    padding: 16px 32px;
+    font-family: 'Noto Serif SC', serif;
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--ink-faint);
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+  }
+  .platform-tab:hover { color: var(--ink-soft); }
+  .platform-tab.active {
+    color: var(--ink);
+    border-bottom-color: var(--accent-jd);
+    font-weight: 700;
+  }
+  .platform-tab.active[data-platform="tm"] { border-bottom-color: var(--accent-tm); }
+
+  .section { margin-bottom: 40px; }
+
+  .section-header {
+    display: flex;
+    align-items: baseline;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .section-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-faint);
+    letter-spacing: 0.2em;
+  }
+
+  .section-title {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+  }
+
+  .section-rule {
+    flex: 1;
+    height: 1px;
+    background: var(--rule);
+  }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--rule);
+    padding: 28px;
+    box-shadow: 4px 4px 0 var(--ink);
+    margin-bottom: 24px;
+  }
+
+  /* Monthly summary stats row */
+  .stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 0;
+    margin-bottom: 24px;
+    border: 1px solid var(--ink);
+  }
+
+  .stat {
+    padding: 16px 20px;
+    border-right: 1px solid var(--rule);
+    background: var(--bg-card);
+  }
+  .stat:last-child { border-right: none; }
+
+  .stat-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .stat-value {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+
+  .stat-delta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    margin-top: 4px;
+    font-weight: 600;
+  }
+  .stat-delta.pos { color: var(--pos); }
+  .stat-delta.neg { color: var(--neg); }
+  .stat-delta.neu { color: var(--ink-faint); }
+
+  .chart-wrap {
+    position: relative;
+    height: 380px;
+    margin-top: 8px;
+  }
+  .chart-wrap.tall { height: 460px; }
+  .chart-wrap.xtall { height: 520px; }
+
+  /* Filter bar */
+  .filter-bar {
+    margin-bottom: 20px;
+    padding: 16px;
+    background: #faf7f0;
+    border: 1px dashed var(--rule);
+  }
+
+  .filter-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.15em;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .filter-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .filter-actions button {
+    background: none;
+    border: 1px solid var(--ink-soft);
+    padding: 3px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    cursor: pointer;
+    color: var(--ink-soft);
+    letter-spacing: 0.1em;
+    transition: all 0.15s;
+  }
+  .filter-actions button:hover,
+  .filter-actions button.active {
+    background: var(--ink);
+    color: white;
+    border-color: var(--ink);
+  }
+
+  .chip-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .chip {
+    padding: 6px 12px;
+    background: white;
+    border: 1px solid var(--rule);
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+    font-family: 'Noto Serif SC', serif;
+  }
+  .chip:hover { border-color: var(--ink-soft); }
+  .chip.active {
+    background: var(--ink);
+    color: white;
+    border-color: var(--ink);
+    font-weight: 600;
+  }
+
+  /* Range selector row */
+  .range-row {
+    display: flex;
+    gap: 16px;
+    align-items: center;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+  .range-row label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+    letter-spacing: 0.1em;
+  }
+  .range-row select {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 4px 8px;
+    border: 1px solid var(--ink-soft);
+    background: white;
+    color: var(--ink);
+    cursor: pointer;
+  }
+
+  .legend-note {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-faint);
+    margin-top: 12px;
+    font-style: italic;
+  }
+
+  .year-key {
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    margin-bottom: 14px;
+    padding: 8px 12px;
+    background: #faf7f0;
+    border-left: 3px solid var(--ink);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--ink-soft);
+    letter-spacing: 0.05em;
+    flex-wrap: wrap;
+  }
+  .year-key .key-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .year-key .swatch-pair {
+    display: inline-flex;
+    border: 1px solid var(--rule);
+  }
+  .year-key .swatch-pair span {
+    display: inline-block;
+    width: 16px;
+    height: 14px;
+  }
+
+  .platform-content { display: none; }
+  .platform-content.active { display: block; }
+
+  @media (max-width: 900px) {
+    .title-block h1 { font-size: 28px; }
+    header { flex-direction: column; align-items: flex-start; }
+    .meta { text-align: left; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="title-block">
+      <div class="eyebrow">HAQU · SEARCH TREND DASHBOARD</div>
+      <h1>哈趣搜索趋势看板</h1>
+    </div>
+    <div class="meta">
+      <div>来源 · 京东 / 天猫</div>
+      <div id="dataRange"></div>
+    </div>
+  </header>
+
+  <div class="platform-tabs">
+    <button class="platform-tab active" data-platform="jd">京东 JD.com</button>
+    <button class="platform-tab" data-platform="tm">天猫 Tmall</button>
+  </div>
+
+  <!-- 京东 -->
+  <div class="platform-content active" id="content-jd">
+    <!-- 月度搜索趋势 -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-number">01</span>
+        <span class="section-title">月度搜索趋势 · 品牌词汇总</span>
+        <span class="section-rule"></span>
+      </div>
+      <div class="stats-row" id="jd-stats"></div>
+      <div class="card">
+        <div class="chart-wrap"><canvas id="jd-monthly"></canvas></div>
+      </div>
+    </div>
+
+    <!-- 搜索词趋势 -->
+    <div class="section">
+      <div class="section-header">
+        <span class="section-number">02</span>
+        <span class="section-title">搜索词趋势 · 型号周度</span>
+        <span class="section-rule"></span>
+      </div>
+      <div class="filter-bar">
+        <div class="filter-label">
+          <span>型号筛选 · 周度堆积图</span>
+          <div class="filter-actions">
+            <button data-act="all" data-target="jd-stack">全选</button>
+            <button data-act="none" data-target="jd-stack">清空</button>
+            <button data-act="top5" data-target="jd-stack">TOP 5</button>
+          </div>
+        </div>
+        <div class="chip-grid" id="jd-stack-chips"></div>
+      </div>
+      <div class="card">
+        <div class="chart-wrap tall"><canvas id="jd-stack"></canvas></div>
+        <div class="legend-note">堆积图 · 显示 2025 与 2026 各周筛选型号的搜索量构成</div>
+      </div>
+
+      <!-- 同周同比 - 全宽 -->
+      <div class="filter-bar">
+        <div class="filter-label">
+          <span>型号筛选 · 同周同比</span>
+          <div class="filter-actions">
+            <button data-act="all" data-target="jd-yoy">全选</button>
+            <button data-act="none" data-target="jd-yoy">清空</button>
+            <button data-act="top5" data-target="jd-yoy">TOP 5</button>
+          </div>
+        </div>
+        <div class="chip-grid" id="jd-yoy-chips"></div>
+        <div class="range-row">
+          <label>周度范围</label>
+          <div class="filter-actions">
+            <button data-range="12" data-target="jd-yoy">近 12 周</button>
+            <button data-range="4" data-target="jd-yoy">近 4 周</button>
+            <button data-range="all" data-target="jd-yoy" class="active">全部</button>
+          </div>
+          <label style="margin-left:auto;">起始周</label>
+          <select id="jd-yoy-start"></select>
+          <label>结束周</label>
+          <select id="jd-yoy-end"></select>
+        </div>
+      </div>
+      <div class="card">
+        <div class="year-key">
+          <span style="font-weight:600;color:var(--ink);">阅读提示</span>
+          <div class="key-item">
+            <span class="swatch-pair">
+              <span style="background:#c8202c;"></span>
+              <span style="background:#c8202c;"></span>
+            </span>
+            <span>每个 W 标签下两根柱子并列 · 左 = 2025 · 右 = 2026 · 同色 = 同型号</span>
+          </div>
+          <div class="key-item">
+            <span style="display:inline-block;width:18px;height:2px;background:#c8202c;"></span>
+            <span>红色折线 = 同比 %</span>
+          </div>
+        </div>
+        <div class="chart-wrap xtall"><canvas id="jd-yoy"></canvas></div>
+        <div class="legend-note">同周同比 · 2025 与 2026 各周按型号堆积，红色折线为筛选型号汇总同比</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 天猫 -->
+  <div class="platform-content" id="content-tm">
+    <div class="section">
+      <div class="section-header">
+        <span class="section-number">01</span>
+        <span class="section-title">月度搜索趋势 · 品牌词汇总</span>
+        <span class="section-rule"></span>
+      </div>
+      <div class="stats-row" id="tm-stats"></div>
+      <div class="card">
+        <div class="chart-wrap"><canvas id="tm-monthly"></canvas></div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-header">
+        <span class="section-number">02</span>
+        <span class="section-title">搜索词趋势 · 型号周度</span>
+        <span class="section-rule"></span>
+      </div>
+      <div class="filter-bar">
+        <div class="filter-label">
+          <span>型号筛选 · 周度堆积图</span>
+          <div class="filter-actions">
+            <button data-act="all" data-target="tm-stack">全选</button>
+            <button data-act="none" data-target="tm-stack">清空</button>
+            <button data-act="top5" data-target="tm-stack">TOP 5</button>
+          </div>
+        </div>
+        <div class="chip-grid" id="tm-stack-chips"></div>
+      </div>
+      <div class="card">
+        <div class="chart-wrap tall"><canvas id="tm-stack"></canvas></div>
+        <div class="legend-note">堆积图 · 显示 2025 与 2026 各周筛选型号的搜索量构成</div>
+      </div>
+
+      <div class="filter-bar">
+        <div class="filter-label">
+          <span>型号筛选 · 同周同比</span>
+          <div class="filter-actions">
+            <button data-act="all" data-target="tm-yoy">全选</button>
+            <button data-act="none" data-target="tm-yoy">清空</button>
+            <button data-act="top5" data-target="tm-yoy">TOP 5</button>
+          </div>
+        </div>
+        <div class="chip-grid" id="tm-yoy-chips"></div>
+        <div class="range-row">
+          <label>周度范围</label>
+          <div class="filter-actions">
+            <button data-range="12" data-target="tm-yoy">近 12 周</button>
+            <button data-range="4" data-target="tm-yoy">近 4 周</button>
+            <button data-range="all" data-target="tm-yoy" class="active">全部</button>
+          </div>
+          <label style="margin-left:auto;">起始周</label>
+          <select id="tm-yoy-start"></select>
+          <label>结束周</label>
+          <select id="tm-yoy-end"></select>
+        </div>
+      </div>
+      <div class="card">
+        <div class="year-key">
+          <span style="font-weight:600;color:var(--ink);">阅读提示</span>
+          <div class="key-item">
+            <span class="swatch-pair">
+              <span style="background:#c8202c;"></span>
+              <span style="background:#c8202c;"></span>
+            </span>
+            <span>每个 W 标签下两根柱子并列 · 左 = 2025 · 右 = 2026 · 同色 = 同型号</span>
+          </div>
+          <div class="key-item">
+            <span style="display:inline-block;width:18px;height:2px;background:#c8202c;"></span>
+            <span>红色折线 = 同比 %</span>
+          </div>
+        </div>
+        <div class="chart-wrap xtall"><canvas id="tm-yoy"></canvas></div>
+        <div class="legend-note">同周同比 · 2025 与 2026 各周按型号堆积，红色折线为筛选型号汇总同比</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DATA = {"jd": {"months": ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "9月", "10月", "11月"], "y2025": [null, 49233.0, 38075.0, 24869.0, 39150.0, 46788.0, 38049.0, 40780.0, 29470.0, 39176.0, 43657.0], "y2026": [50476.0, 42636.0, 40515.0, 30392.0, 30204.0, null, null, null, null, null, null], "models": ["哈趣k3pro", "哈趣h3pro", "哈趣h3高亮版", "哈趣q1promax", "哈趣k3ultra max", "哈趣q1pro", "哈趣h3ultra", "哈趣h3ultramax", "哈趣h3 ultra max", "哈趣h3ultra max", "哈趣q1", "哈趣q1max", "哈趣h3", "哈趣k2pro", "哈趣", "哈趣k2", "哈趣k2pro高亮版", "哈趣投影仪", "哈趣newk2", "哈趣k2高亮版", "投影仪"], "weeks": [{"week": "2025年W6", "date_range": "2.5-2.9", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 3099.0, "哈趣q1max": null, "哈趣h3": null, "哈趣k2pro": 997.0, "哈趣": 851.0, "哈趣k2": 686.0, "哈趣k2pro高亮版": 270.0, "哈趣投影仪": 253.0, "哈趣newk2": 98.0, "哈趣k2高亮版": 31.0, "投影仪": 1013.0}, {"week": "2025年W7", "date_range": "2.10-2.16", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 6784.0, "哈趣q1max": null, "哈趣h3": null, "哈趣k2pro": 1912.0, "哈趣": 1894.0, "哈趣k2": 1407.0, "哈趣k2pro高亮版": 581.0, "哈趣投影仪": 524.0, "哈趣newk2": 274.0, "哈趣k2高亮版": 72.0, "投影仪": 6255.0}, {"week": "2025年W8", "date_range": "2.17-2.23", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 6604.0, "哈趣q1max": null, "哈趣h3": null, "哈趣k2pro": 2594.0, "哈趣": 1972.0, "哈趣k2": 1344.0, "哈趣k2pro高亮版": 819.0, "哈趣投影仪": 700.0, "哈趣newk2": 269.0, "哈趣k2高亮版": 88.0, "投影仪": 8228.0}, {"week": "2025年W9", "date_range": "2.24-3.2", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 4774.0, "哈趣q1max": null, "哈趣h3": null, "哈趣k2pro": 1801.0, "哈趣": 1413.0, "哈趣k2": 953.0, "哈趣k2pro高亮版": 708.0, "哈趣投影仪": 494.0, "哈趣newk2": 187.0, "哈趣k2高亮版": 51.0, "投影仪": 6119.0}, {"week": "2025年W10", "date_range": "3.3-3.9", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 3909.0, "哈趣q1max": null, "哈趣h3": null, "哈趣k2pro": 1587.0, "哈趣": 1286.0, "哈趣k2": 792.0, "哈趣k2pro高亮版": 710.0, "哈趣投影仪": 366.0, "哈趣newk2": 204.0, "哈趣k2高亮版": 48.0, "投影仪": 4769.0}, {"week": "2025年W11", "date_range": "3.10-3.16", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 3786.0, "哈趣q1max": null, "哈趣h3": null, "哈趣k2pro": 1319.0, "哈趣": 1139.0, "哈趣k2": 652.0, "哈趣k2pro高亮版": 609.0, "哈趣投影仪": 313.0, "哈趣newk2": 149.0, "哈趣k2高亮版": 31.0, "投影仪": 4285.0}, {"week": "2025年W12", "date_range": "3.19-3.23", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 3239.0, "哈趣q1max": null, "哈趣h3": null, "哈趣k2pro": 1135.0, "哈趣": 935.0, "哈趣k2": 494.0, "哈趣k2pro高亮版": 467.0, "哈趣投影仪": 252.0, "哈趣newk2": 144.0, "哈趣k2高亮版": 22.0, "投影仪": 4187.0}, {"week": "2025年W13", "date_range": "3.24-3.30", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 2551.0, "哈趣q1max": null, "哈趣h3": null, "哈趣k2pro": 857.0, "哈趣": 731.0, "哈趣k2": 369.0, "哈趣k2pro高亮版": 321.0, "哈趣投影仪": 176.0, "哈趣newk2": 98.0, "哈趣k2高亮版": 23.0, "投影仪": 3447.0}, {"week": "2025年W14", "date_range": "3.31-4.6", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 2666.0, "哈趣q1max": null, "哈趣h3": null, "哈趣k2pro": 798.0, "哈趣": 732.0, "哈趣k2": 369.0, "哈趣k2pro高亮版": 272.0, "哈趣投影仪": 225.0, "哈趣newk2": 113.0, "哈趣k2高亮版": 17.0, "投影仪": 2955.0}, {"week": "2025年W15", "date_range": "4.7-4.13", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 2415.0, "哈趣q1max": null, "哈趣h3": null, "哈趣k2pro": 712.0, "哈趣": 690.0, "哈趣k2": 344.0, "哈趣k2pro高亮版": 217.0, "哈趣投影仪": 182.0, "哈趣newk2": 109.0, "哈趣k2高亮版": 17.0, "投影仪": 2833.0}, {"week": "2025年W16", "date_range": "4.14-4.20", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 3499.0, "哈趣q1max": null, "哈趣h3": null, "哈趣k2pro": 814.0, "哈趣": 1434.0, "哈趣k2": 312.0, "哈趣k2pro高亮版": 319.0, "哈趣投影仪": 445.0, "哈趣newk2": 142.0, "哈趣k2高亮版": 16.0, "投影仪": 3499.0}, {"week": "2025年W17", "date_range": "4.21-4.27", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 2424.0, "哈趣q1max": null, "哈趣h3": null, "哈趣k2pro": 759.0, "哈趣": 721.0, "哈趣k2": 300.0, "哈趣k2pro高亮版": 280.0, "哈趣投影仪": 195.0, "哈趣newk2": 89.0, "哈趣k2高亮版": 20.0, "投影仪": 2133.0}, {"week": "2025年W18", "date_range": "4.28-5.4", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 2952.0, "哈趣q1max": null, "哈趣h3": null, "哈趣k2pro": 773.0, "哈趣": 1428.0, "哈趣k2": 360.0, "哈趣k2pro高亮版": 296.0, "哈趣投影仪": 386.0, "哈趣newk2": 131.0, "哈趣k2高亮版": 28.0, "投影仪": 3235.0}, {"week": "2025年W19", "date_range": "5.5-5.11", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 2531.0, "哈趣q1max": null, "哈趣h3": null, "哈趣k2pro": 1158.0, "哈趣": 809.0, "哈趣k2": 312.0, "哈趣k2pro高亮版": 194.0, "哈趣投影仪": 183.0, "哈趣newk2": 84.0, "哈趣k2高亮版": 15.0, "投影仪": 4133.0}, {"week": "2025年W20", "date_range": "5.12-5.18", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 3815.0, "哈趣q1max": 896.0, "哈趣h3": null, "哈趣k2pro": 1020.0, "哈趣": 1181.0, "哈趣k2": 412.0, "哈趣k2pro高亮版": 341.0, "哈趣投影仪": 288.0, "哈趣newk2": 119.0, "哈趣k2高亮版": 24.0, "投影仪": 3178.0}, {"week": "2025年W21", "date_range": "5.19-5.25", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 3683.0, "哈趣q1max": 1390.0, "哈趣h3": null, "哈趣k2pro": 791.0, "哈趣": 1240.0, "哈趣k2": 322.0, "哈趣k2pro高亮版": 284.0, "哈趣投影仪": 358.0, "哈趣newk2": 124.0, "哈趣k2高亮版": 12.0, "投影仪": 3060.0}, {"week": "2025年W22", "date_range": "5.26-6.1", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 3499.0, "哈趣q1max": 1708.0, "哈趣h3": 694.0, "哈趣k2pro": 814.0, "哈趣": 1434.0, "哈趣k2": 312.0, "哈趣k2pro高亮版": 319.0, "哈趣投影仪": 445.0, "哈趣newk2": 142.0, "哈趣k2高亮版": 16.0, "投影仪": 3499.0}, {"week": "2025年W23", "date_range": "6.2-6.8", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 2952.0, "哈趣q1max": 1510.0, "哈趣h3": 1352.0, "哈趣k2pro": 773.0, "哈趣": 1428.0, "哈趣k2": 360.0, "哈趣k2pro高亮版": 296.0, "哈趣投影仪": 386.0, "哈趣newk2": 131.0, "哈趣k2高亮版": 28.0, "投影仪": 3235.0}, {"week": "2025年W24", "date_range": "6.9-6.15", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 2711.0, "哈趣q1max": 1553.0, "哈趣h3": 1969.0, "哈趣k2pro": 874.0, "哈趣": 1476.0, "哈趣k2": 320.0, "哈趣k2pro高亮版": 228.0, "哈趣投影仪": 372.0, "哈趣newk2": 71.0, "哈趣k2高亮版": 24.0, "投影仪": 3060.0}, {"week": "2025年W25", "date_range": "6.16-6.22", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 3060.0, "哈趣q1max": 2286.0, "哈趣h3": 2341.0, "哈趣k2pro": 1158.0, "哈趣": 1702.0, "哈趣k2": 407.0, "哈趣k2pro高亮版": 414.0, "哈趣投影仪": 466.0, "哈趣newk2": 61.0, "哈趣k2高亮版": 19.0, "投影仪": 4133.0}, {"week": "2025年W26", "date_range": "6.23-6.29", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 1809.0, "哈趣q1max": 1042.0, "哈趣h3": 1289.0, "哈趣k2pro": 496.0, "哈趣": 921.0, "哈趣k2": 273.0, "哈趣k2pro高亮版": 168.0, "哈趣投影仪": 219.0, "哈趣newk2": 44.0, "哈趣k2高亮版": 12.0, "投影仪": 2599.0}, {"week": "2025年W27", "date_range": "6.30-7.6", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 1849.0, "哈趣q1max": 938.0, "哈趣h3": 1372.0, "哈趣k2pro": 550.0, "哈趣": 947.0, "哈趣k2": 290.0, "哈趣k2pro高亮版": 191.0, "哈趣投影仪": 202.0, "哈趣newk2": 32.0, "哈趣k2高亮版": 12.0, "投影仪": 2073.0}, {"week": "2025年W28", "date_range": "7.7-7.13", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 2016.0, "哈趣q1max": 1111.0, "哈趣h3": 1730.0, "哈趣k2pro": 615.0, "哈趣": 1069.0, "哈趣k2": 260.0, "哈趣k2pro高亮版": 205.0, "哈趣投影仪": 291.0, "哈趣newk2": 46.0, "哈趣k2高亮版": 20.0, "投影仪": 2438.0}, {"week": "2025年W29", "date_range": "7.14-7.20", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 2029.0, "哈趣q1max": 1130.0, "哈趣h3": 2158.0, "哈趣k2pro": 653.0, "哈趣": 1195.0, "哈趣k2": 315.0, "哈趣k2pro高亮版": 253.0, "哈趣投影仪": 265.0, "哈趣newk2": 41.0, "哈趣k2高亮版": 10.0, "投影仪": 2674.0}, {"week": "2025年W30", "date_range": "7.21-7.27", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 1889.0, "哈趣q1max": 1140.0, "哈趣h3": 2070.0, "哈趣k2pro": 586.0, "哈趣": 1153.0, "哈趣k2": 231.0, "哈趣k2pro高亮版": 232.0, "哈趣投影仪": 281.0, "哈趣newk2": 40.0, "哈趣k2高亮版": 13.0, "投影仪": 2966.0}, {"week": "2025年W31", "date_range": "7.28-8.3", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": null, "哈趣h3ultra": null, "哈趣h3ultramax": null, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 2181.0, "哈趣q1max": 1407.0, "哈趣h3": 1985.0, "哈趣k2pro": 707.0, "哈趣": 1789.0, "哈趣k2": 388.0, "哈趣k2pro高亮版": 310.0, "哈趣投影仪": 579.0, "哈趣newk2": 16.0, "哈趣k2高亮版": 155.0, "投影仪": 5493.0}, {"week": "2025年W32", "date_range": "8.4-8.10", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 1.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 1900.0, "哈趣q1max": 1149.0, "哈趣h3": 2076.0, "哈趣k2pro": 654.0, "哈趣": 1195.0, "哈趣k2": 232.0, "哈趣k2pro高亮版": 210.0, "哈趣投影仪": 273.0, "哈趣newk2": 33.0, "哈趣k2高亮版": 12.0, "投影仪": 3087.0}, {"week": "2025年W33", "date_range": "8.11-8.17", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 1.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 1718.0, "哈趣q1max": 1136.0, "哈趣h3": 2189.0, "哈趣k2pro": 644.0, "哈趣": 1171.0, "哈趣k2": 203.0, "哈趣k2pro高亮版": 212.0, "哈趣投影仪": 281.0, "哈趣newk2": 42.0, "哈趣k2高亮版": 11.0, "投影仪": 2855.0}, {"week": "2025年W34", "date_range": "8.18-8.24", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 4.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 1931.0, "哈趣q1max": 1215.0, "哈趣h3": 2165.0, "哈趣k2pro": 722.0, "哈趣": 1200.0, "哈趣k2": 265.0, "哈趣k2pro高亮版": 258.0, "哈趣投影仪": 289.0, "哈趣newk2": 43.0, "哈趣k2高亮版": 12.0, "投影仪": 3024.0}, {"week": "2025年W35", "date_range": "8.25-8.31", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 2.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 2040.0, "哈趣q1max": 1353.0, "哈趣h3": 2152.0, "哈趣k2pro": 768.0, "哈趣": 1241.0, "哈趣k2": 243.0, "哈趣k2pro高亮版": 249.0, "哈趣投影仪": 300.0, "哈趣newk2": 40.0, "哈趣k2高亮版": 11.0, "投影仪": 3423.0}, {"week": "2025年W36", "date_range": "9.1-9.7", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 2.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 1465.0, "哈趣q1max": 961.0, "哈趣h3": 1776.0, "哈趣k2pro": 547.0, "哈趣": 963.0, "哈趣k2": 181.0, "哈趣k2pro高亮版": 191.0, "哈趣投影仪": 326.0, "哈趣newk2": 19.0, "哈趣k2高亮版": 17.0, "投影仪": 3233.0}, {"week": "2025年W37", "date_range": "9.8-9.14", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 1.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 1412.0, "哈趣q1max": 775.0, "哈趣h3": 1545.0, "哈趣k2pro": 521.0, "哈趣": 997.0, "哈趣k2": 166.0, "哈趣k2pro高亮版": 224.0, "哈趣投影仪": 348.0, "哈趣newk2": 22.0, "哈趣k2高亮版": 21.0, "投影仪": 2877.0}, {"week": "2025年W38", "date_range": "9.15-9.21", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 3.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 1470.0, "哈趣q1max": 765.0, "哈趣h3": 1366.0, "哈趣k2pro": 518.0, "哈趣": 988.0, "哈趣k2": 135.0, "哈趣k2pro高亮版": 194.0, "哈趣投影仪": 302.0, "哈趣newk2": 16.0, "哈趣k2高亮版": 21.0, "投影仪": 3134.0}, {"week": "2025年W39", "date_range": "9.22-9.28", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 7.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 1429.0, "哈趣q1max": 699.0, "哈趣h3": 1415.0, "哈趣k2pro": 519.0, "哈趣": 860.0, "哈趣k2": 180.0, "哈趣k2pro高亮版": 184.0, "哈趣投影仪": 303.0, "哈趣newk2": 15.0, "哈趣k2高亮版": 18.0, "投影仪": 3017.0}, {"week": "2025年W40", "date_range": "9.29-10.5", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 1.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 1196.0, "哈趣q1max": 591.0, "哈趣h3": 1260.0, "哈趣k2pro": 467.0, "哈趣": 829.0, "哈趣k2": 139.0, "哈趣k2pro高亮版": 184.0, "哈趣投影仪": 257.0, "哈趣newk2": 16.0, "哈趣k2高亮版": 24.0, "投影仪": 3086.0}, {"week": "2025年W41", "date_range": "10.6-10.12", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 8.0, "哈趣h3ultra": 1.0, "哈趣h3ultramax": 0.0, "哈趣h3 ultra max": null, "哈趣h3ultra max": null, "哈趣q1": 1465.0, "哈趣q1max": 709.0, "哈趣h3": 1538.0, "哈趣k2pro": 551.0, "哈趣": 970.0, "哈趣k2": 183.0, "哈趣k2pro高亮版": 272.0, "哈趣投影仪": 320.0, "哈趣newk2": 14.0, "哈趣k2高亮版": 33.0, "投影仪": 3502.0}, {"week": "2025年W42", "date_range": "10.13-10.19", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 100.0, "哈趣h3ultra": 44.0, "哈趣h3ultramax": 9.0, "哈趣h3 ultra max": null, "哈趣h3ultra max": 1.0, "哈趣q1": 1517.0, "哈趣q1max": 927.0, "哈趣h3": 1794.0, "哈趣k2pro": 724.0, "哈趣": 1435.0, "哈趣k2": 229.0, "哈趣k2pro高亮版": 369.0, "哈趣投影仪": 407.0, "哈趣newk2": 14.0, "哈趣k2高亮版": 60.0, "投影仪": 4280.0}, {"week": "2025年W43", "date_range": "10.20-10.26", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 511.0, "哈趣h3ultra": 307.0, "哈趣h3ultramax": 206.0, "哈趣h3 ultra max": null, "哈趣h3ultra max": 5.0, "哈趣q1": 2022.0, "哈趣q1max": 1376.0, "哈趣h3": 2120.0, "哈趣k2pro": 867.0, "哈趣": 1750.0, "哈趣k2": 247.0, "哈趣k2pro高亮版": 568.0, "哈趣投影仪": 517.0, "哈趣newk2": 22.0, "哈趣k2高亮版": 115.0, "投影仪": 6339.0}, {"week": "2025年W44", "date_range": "10.27-11.2", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 655.0, "哈趣h3ultra": 355.0, "哈趣h3ultramax": 266.0, "哈趣h3 ultra max": null, "哈趣h3ultra max": 2.0, "哈趣q1": 1548.0, "哈趣q1max": 1100.0, "哈趣h3": 1807.0, "哈趣k2pro": 625.0, "哈趣": 1505.0, "哈趣k2": 263.0, "哈趣k2pro高亮版": 372.0, "哈趣投影仪": 485.0, "哈趣newk2": 7.0, "哈趣k2高亮版": 101.0, "投影仪": 4685.0}, {"week": "2025年W45", "date_range": "11.3-11.9", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 948.0, "哈趣h3ultra": 368.0, "哈趣h3ultramax": 484.0, "哈趣h3 ultra max": 12.0, "哈趣h3ultra max": 13.0, "哈趣q1": 1809.0, "哈趣q1max": 1059.0, "哈趣h3": 1679.0, "哈趣k2pro": 568.0, "哈趣": 1446.0, "哈趣k2": 318.0, "哈趣k2pro高亮版": 290.0, "哈趣投影仪": 512.0, "哈趣newk2": 18.0, "哈趣k2高亮版": 103.0, "投影仪": 5295.0}, {"week": "2025年W46", "date_range": "11.10-11.16", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 1530.0, "哈趣h3ultra": 521.0, "哈趣h3ultramax": 705.0, "哈趣h3 ultra max": 4.0, "哈趣h3ultra max": 8.0, "哈趣q1": 2181.0, "哈趣q1max": 1407.0, "哈趣h3": 1985.0, "哈趣k2pro": 707.0, "哈趣": 1789.0, "哈趣k2": 388.0, "哈趣k2pro高亮版": 310.0, "哈趣投影仪": 579.0, "哈趣newk2": 16.0, "哈趣k2高亮版": 155.0, "投影仪": 5493.0}, {"week": "2025年W47", "date_range": "11.17-11.23", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 863.0, "哈趣h3ultra": 277.0, "哈趣h3ultramax": 415.0, "哈趣h3 ultra max": 3.0, "哈趣h3ultra max": 17.0, "哈趣q1": 1321.0, "哈趣q1max": 515.0, "哈趣h3": 1354.0, "哈趣k2pro": 367.0, "哈趣": 1030.0, "哈趣k2": 239.0, "哈趣k2pro高亮版": 150.0, "哈趣投影仪": 318.0, "哈趣newk2": 8.0, "哈趣k2高亮版": 84.0, "投影仪": 3036.0}, {"week": "2025年W48", "date_range": "11.24-11.30", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 814.0, "哈趣h3ultra": 224.0, "哈趣h3ultramax": 398.0, "哈趣h3 ultra max": 3.0, "哈趣h3ultra max": 8.0, "哈趣q1": 1284.0, "哈趣q1max": 439.0, "哈趣h3": 1280.0, "哈趣k2pro": 393.0, "哈趣": 1012.0, "哈趣k2": 281.0, "哈趣k2pro高亮版": 150.0, "哈趣投影仪": 341.0, "哈趣newk2": 9.0, "哈趣k2高亮版": 95.0, "投影仪": 3591.0}, {"week": "2025年W49", "date_range": "12.1-12.7", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 1090.0, "哈趣h3ultra": 350.0, "哈趣h3ultramax": 691.0, "哈趣h3 ultra max": 11.0, "哈趣h3ultra max": 11.0, "哈趣q1": 1380.0, "哈趣q1max": 578.0, "哈趣h3": 1483.0, "哈趣k2pro": 385.0, "哈趣": 1191.0, "哈趣k2": 272.0, "哈趣k2pro高亮版": 182.0, "哈趣投影仪": 409.0, "哈趣newk2": 5.0, "哈趣k2高亮版": 106.0, "投影仪": 3708.0}, {"week": "2025年W50", "date_range": "12.8-12.14", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 2015.0, "哈趣h3ultra": 748.0, "哈趣h3ultramax": 1982.0, "哈趣h3 ultra max": 14.0, "哈趣h3ultra max": 13.0, "哈趣q1": 1671.0, "哈趣q1max": 870.0, "哈趣h3": 2126.0, "哈趣k2pro": 570.0, "哈趣": 1951.0, "哈趣k2": 390.0, "哈趣k2pro高亮版": 251.0, "哈趣投影仪": 539.0, "哈趣newk2": 9.0, "哈趣k2高亮版": 142.0, "投影仪": 6781.0}, {"week": "2025年W51", "date_range": "12.15-12.21", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 1462.0, "哈趣h3ultra": 446.0, "哈趣h3ultramax": 1459.0, "哈趣h3 ultra max": 10.0, "哈趣h3ultra max": 75.0, "哈趣q1": 1139.0, "哈趣q1max": 652.0, "哈趣h3": 1535.0, "哈趣k2pro": 417.0, "哈趣": 1582.0, "哈趣k2": 326.0, "哈趣k2pro高亮版": 149.0, "哈趣投影仪": 431.0, "哈趣newk2": 9.0, "哈趣k2高亮版": 143.0, "投影仪": 6101.0}, {"week": "2025年W52", "date_range": "12.22-12.28", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 1765.0, "哈趣h3ultra": 361.0, "哈趣h3ultramax": 1143.0, "哈趣h3 ultra max": 80.0, "哈趣h3ultra max": 161.0, "哈趣q1": 1103.0, "哈趣q1max": 742.0, "哈趣h3": 1384.0, "哈趣k2pro": 449.0, "哈趣": 1508.0, "哈趣k2": 314.0, "哈趣k2pro高亮版": 183.0, "哈趣投影仪": 453.0, "哈趣newk2": 11.0, "哈趣k2高亮版": 137.0, "投影仪": 5606.0}, {"week": "2026年W1", "date_range": "12.29-1.4", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 1486.0, "哈趣h3ultra": 388.0, "哈趣h3ultramax": 1036.0, "哈趣h3 ultra max": 631.0, "哈趣h3ultra max": 226.0, "哈趣q1": 889.0, "哈趣q1max": 738.0, "哈趣h3": 1428.0, "哈趣k2pro": 559.0, "哈趣": 1494.0, "哈趣k2": 318.0, "哈趣k2pro高亮版": 193.0, "哈趣投影仪": 500.0, "哈趣newk2": 8.0, "哈趣k2高亮版": 167.0, "投影仪": 5518.0}, {"week": "2026年W2", "date_range": "1.5-1.11", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": null, "哈趣q1pro": 1286.0, "哈趣h3ultra": 310.0, "哈趣h3ultramax": 971.0, "哈趣h3 ultra max": 395.0, "哈趣h3ultra max": 206.0, "哈趣q1": 720.0, "哈趣q1max": 590.0, "哈趣h3": 1243.0, "哈趣k2pro": 502.0, "哈趣": 1493.0, "哈趣k2": 263.0, "哈趣k2pro高亮版": 132.0, "哈趣投影仪": 450.0, "哈趣newk2": 13.0, "哈趣k2高亮版": 138.0, "投影仪": 4828.0}, {"week": "2026年W3", "date_range": "1.12-1.18", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": 407.0, "哈趣q1pro": 1460.0, "哈趣h3ultra": 317.0, "哈趣h3ultramax": 1028.0, "哈趣h3 ultra max": 9.0, "哈趣h3ultra max": 143.0, "哈趣q1": 705.0, "哈趣q1max": 698.0, "哈趣h3": 1055.0, "哈趣k2pro": 497.0, "哈趣": 1493.0, "哈趣k2": 266.0, "哈趣k2pro高亮版": 136.0, "哈趣投影仪": 529.0, "哈趣newk2": 7.0, "哈趣k2高亮版": 151.0, "投影仪": 5457.0}, {"week": "2026年W4", "date_range": "1.19-1.25", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": null, "哈趣q1promax": null, "哈趣k3ultra max": 653.0, "哈趣q1pro": 1571.0, "哈趣h3ultra": 264.0, "哈趣h3ultramax": 997.0, "哈趣h3 ultra max": 319.0, "哈趣h3ultra max": 305.0, "哈趣q1": 682.0, "哈趣q1max": 633.0, "哈趣h3": 1171.0, "哈趣k2pro": 591.0, "哈趣": 1686.0, "哈趣k2": 266.0, "哈趣k2pro高亮版": 164.0, "哈趣投影仪": 632.0, "哈趣newk2": 18.0, "哈趣k2高亮版": 188.0, "投影仪": 5289.0}, {"week": "2026年W5", "date_range": "1.26-2.1", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": 24.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 596.0, "哈趣q1pro": 1689.0, "哈趣h3ultra": 292.0, "哈趣h3ultramax": 1100.0, "哈趣h3 ultra max": 372.0, "哈趣h3ultra max": 257.0, "哈趣q1": 627.0, "哈趣q1max": 675.0, "哈趣h3": 1128.0, "哈趣k2pro": 678.0, "哈趣": 1657.0, "哈趣k2": 285.0, "哈趣k2pro高亮版": 165.0, "哈趣投影仪": 625.0, "哈趣newk2": 11.0, "哈趣k2高亮版": 207.0, "投影仪": 4587.0}, {"week": "2026年W6", "date_range": "2.2-2.8", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": 134.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 655.0, "哈趣q1pro": 1740.0, "哈趣h3ultra": 288.0, "哈趣h3ultramax": 401.0, "哈趣h3 ultra max": 658.0, "哈趣h3ultra max": 373.0, "哈趣q1": 507.0, "哈趣q1max": 605.0, "哈趣h3": 1463.0, "哈趣k2pro": 710.0, "哈趣": 1555.0, "哈趣k2": 275.0, "哈趣k2pro高亮版": 162.0, "哈趣投影仪": 697.0, "哈趣newk2": 3.0, "哈趣k2高亮版": 181.0, "投影仪": 5571.0}, {"week": "2026年W7", "date_range": "2.9-2.15", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": 164.0, "哈趣q1promax": 1.0, "哈趣k3ultra max": 793.0, "哈趣q1pro": 1523.0, "哈趣h3ultra": 265.0, "哈趣h3ultramax": 109.0, "哈趣h3 ultra max": 699.0, "哈趣h3ultra max": 370.0, "哈趣q1": 467.0, "哈趣q1max": 254.0, "哈趣h3": 1417.0, "哈趣k2pro": 673.0, "哈趣": 1487.0, "哈趣k2": 183.0, "哈趣k2pro高亮版": 147.0, "哈趣投影仪": 628.0, "哈趣newk2": 12.0, "哈趣k2高亮版": 128.0, "投影仪": 6290.0}, {"week": "2026年W8", "date_range": "2.16-2.22", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": 99.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 575.0, "哈趣q1pro": 1022.0, "哈趣h3ultra": 140.0, "哈趣h3ultramax": 33.0, "哈趣h3 ultra max": 395.0, "哈趣h3ultra max": 206.0, "哈趣q1": 305.0, "哈趣q1max": 39.0, "哈趣h3": 882.0, "哈趣k2pro": 417.0, "哈趣": 958.0, "哈趣k2": 146.0, "哈趣k2pro高亮版": 83.0, "哈趣投影仪": 334.0, "哈趣newk2": 9.0, "哈趣k2高亮版": 96.0, "投影仪": 22571.0}, {"week": "2026年W9", "date_range": "2.23-3.1", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": 166.0, "哈趣q1promax": 36.0, "哈趣k3ultra max": 785.0, "哈趣q1pro": 1641.0, "哈趣h3ultra": 187.0, "哈趣h3ultramax": 21.0, "哈趣h3 ultra max": 631.0, "哈趣h3ultra max": 226.0, "哈趣q1": 445.0, "哈趣q1max": 145.0, "哈趣h3": 1439.0, "哈趣k2pro": 357.0, "哈趣": 1475.0, "哈趣k2": 202.0, "哈趣k2pro高亮版": 103.0, "哈趣投影仪": 486.0, "哈趣newk2": 12.0, "哈趣k2高亮版": 125.0, "投影仪": 21457.0}, {"week": "2026年W10", "date_range": "3.2-3.8", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": 171.0, "哈趣q1promax": 137.0, "哈趣k3ultra max": 634.0, "哈趣q1pro": 1655.0, "哈趣h3ultra": 206.0, "哈趣h3ultramax": 436.0, "哈趣h3 ultra max": 214.0, "哈趣h3ultra max": 213.0, "哈趣q1": 380.0, "哈趣q1max": 399.0, "哈趣h3": 1395.0, "哈趣k2pro": 273.0, "哈趣": 1249.0, "哈趣k2": 187.0, "哈趣k2pro高亮版": 100.0, "哈趣投影仪": 403.0, "哈趣newk2": 9.0, "哈趣k2高亮版": 134.0, "投影仪": 4728.0}, {"week": "2026年W11", "date_range": "3.9-3.15", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": 174.0, "哈趣q1promax": 270.0, "哈趣k3ultra max": 814.0, "哈趣q1pro": 1776.0, "哈趣h3ultra": 279.0, "哈趣h3ultramax": 632.0, "哈趣h3 ultra max": 17.0, "哈趣h3ultra max": 243.0, "哈趣q1": 330.0, "哈趣q1max": 268.0, "哈趣h3": 1306.0, "哈趣k2pro": 137.0, "哈趣": 1185.0, "哈趣k2": 187.0, "哈趣k2pro高亮版": 68.0, "哈趣投影仪": 422.0, "哈趣newk2": 12.0, "哈趣k2高亮版": 165.0, "投影仪": 4879.0}, {"week": "2026年W12", "date_range": "3.16-3.22", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": 160.0, "哈趣q1promax": 244.0, "哈趣k3ultra max": 797.0, "哈趣q1pro": 1521.0, "哈趣h3ultra": 236.0, "哈趣h3ultramax": 542.0, "哈趣h3 ultra max": 11.0, "哈趣h3ultra max": 138.0, "哈趣q1": 337.0, "哈趣q1max": 166.0, "哈趣h3": 961.0, "哈趣k2pro": 53.0, "哈趣": 922.0, "哈趣k2": 226.0, "哈趣k2pro高亮版": 39.0, "哈趣投影仪": 340.0, "哈趣newk2": 13.0, "哈趣k2高亮版": 144.0, "投影仪": 4315.0}, {"week": "2026年W13", "date_range": "3.23-3.29", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": 106.0, "哈趣q1promax": 183.0, "哈趣k3ultra max": 699.0, "哈趣q1pro": 1416.0, "哈趣h3ultra": 251.0, "哈趣h3ultramax": 402.0, "哈趣h3 ultra max": 9.0, "哈趣h3ultra max": 143.0, "哈趣q1": 238.0, "哈趣q1max": 136.0, "哈趣h3": 792.0, "哈趣k2pro": 38.0, "哈趣": 842.0, "哈趣k2": 215.0, "哈趣k2pro高亮版": 35.0, "哈趣投影仪": 327.0, "哈趣newk2": 5.0, "哈趣k2高亮版": 107.0, "投影仪": 3495.0}, {"week": "2026年W14", "date_range": "3.30-4.5", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": 105.0, "哈趣q1promax": 118.0, "哈趣k3ultra max": 538.0, "哈趣q1pro": 1322.0, "哈趣h3ultra": 157.0, "哈趣h3ultramax": 388.0, "哈趣h3 ultra max": 9.0, "哈趣h3ultra max": 112.0, "哈趣q1": 201.0, "哈趣q1max": 121.0, "哈趣h3": 687.0, "哈趣k2pro": 54.0, "哈趣": 717.0, "哈趣k2": 180.0, "哈趣k2pro高亮版": 31.0, "哈趣投影仪": 300.0, "哈趣newk2": 5.0, "哈趣k2高亮版": 98.0, "投影仪": 3421.0}, {"week": "2026年W15", "date_range": "4.6-4.12", "哈趣k3pro": null, "哈趣h3pro": null, "哈趣h3高亮版": 138.0, "哈趣q1promax": 107.0, "哈趣k3ultra max": 481.0, "哈趣q1pro": 1252.0, "哈趣h3ultra": 154.0, "哈趣h3ultramax": 430.0, "哈趣h3 ultra max": 6.0, "哈趣h3ultra max": 138.0, "哈趣q1": 193.0, "哈趣q1max": 129.0, "哈趣h3": 782.0, "哈趣k2pro": 49.0, "哈趣": 672.0, "哈趣k2": 191.0, "哈趣k2pro高亮版": 20.0, "哈趣投影仪": 301.0, "哈趣newk2": 3.0, "哈趣k2高亮版": 98.0, "投影仪": 3215.0}, {"week": "2026年W16", "date_range": "4.13-4.19", "哈趣k3pro": 72.0, "哈趣h3pro": null, "哈趣h3高亮版": 119.0, "哈趣q1promax": 111.0, "哈趣k3ultra max": 343.0, "哈趣q1pro": 1304.0, "哈趣h3ultra": 138.0, "哈趣h3ultramax": 502.0, "哈趣h3 ultra max": 7.0, "哈趣h3ultra max": 225.0, "哈趣q1": 179.0, "哈趣q1max": 107.0, "哈趣h3": 696.0, "哈趣k2pro": 60.0, "哈趣": 829.0, "哈趣k2": 221.0, "哈趣k2pro高亮版": 23.0, "哈趣投影仪": 318.0, "哈趣newk2": 3.0, "哈趣k2高亮版": 110.0, "投影仪": 2841.0}, {"week": "2026年W17", "date_range": "4.20-4.26", "哈趣k3pro": 88.0, "哈趣h3pro": null, "哈趣h3高亮版": 128.0, "哈趣q1promax": 131.0, "哈趣k3ultra max": 280.0, "哈趣q1pro": 1367.0, "哈趣h3ultra": 129.0, "哈趣h3ultramax": 667.0, "哈趣h3 ultra max": 12.0, "哈趣h3ultra max": 245.0, "哈趣q1": 182.0, "哈趣q1max": 103.0, "哈趣h3": 740.0, "哈趣k2pro": 30.0, "哈趣": 887.0, "哈趣k2": 194.0, "哈趣k2pro高亮版": 19.0, "哈趣投影仪": 341.0, "哈趣newk2": 0.0, "哈趣k2高亮版": 95.0, "投影仪": 2433.0}, {"week": "2026年W18", "date_range": "4.27-5.3", "哈趣k3pro": 64.0, "哈趣h3pro": null, "哈趣h3高亮版": 152.0, "哈趣q1promax": 151.0, "哈趣k3ultra max": 288.0, "哈趣q1pro": 1341.0, "哈趣h3ultra": 187.0, "哈趣h3ultramax": 785.0, "哈趣h3 ultra max": 18.0, "哈趣h3ultra max": 169.0, "哈趣q1": 185.0, "哈趣q1max": 109.0, "哈趣h3": 792.0, "哈趣k2pro": 33.0, "哈趣": 803.0, "哈趣k2": 179.0, "哈趣k2pro高亮版": 32.0, "哈趣投影仪": 339.0, "哈趣newk2": 0.0, "哈趣k2高亮版": 107.0, "投影仪": 10823.0}, {"week": "2026年W19", "date_range": "5.4-5.10", "哈趣k3pro": 80.0, "哈趣h3pro": null, "哈趣h3高亮版": 124.0, "哈趣q1promax": 126.0, "哈趣k3ultra max": 292.0, "哈趣q1pro": 1248.0, "哈趣h3ultra": 174.0, "哈趣h3ultramax": 752.0, "哈趣h3 ultra max": 21.0, "哈趣h3ultra max": 131.0, "哈趣q1": 226.0, "哈趣q1max": 97.0, "哈趣h3": 741.0, "哈趣k2pro": 23.0, "哈趣": 768.0, "哈趣k2": 228.0, "哈趣k2pro高亮版": 20.0, "哈趣投影仪": 324.0, "哈趣newk2": 1.0, "哈趣k2高亮版": 107.0, "投影仪": 2763.0}, {"week": "2026年W20", "date_range": "5.11-5.17", "哈趣k3pro": 109.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 163.0, "哈趣q1promax": 159.0, "哈趣k3ultra max": 314.0, "哈趣q1pro": 1296.0, "哈趣h3ultra": 299.0, "哈趣h3ultramax": 890.0, "哈趣h3 ultra max": 27.0, "哈趣h3ultra max": 151.0, "哈趣q1": 237.0, "哈趣q1max": 92.0, "哈趣h3": 882.0, "哈趣k2pro": 18.0, "哈趣": 973.0, "哈趣k2": 231.0, "哈趣k2pro高亮版": 12.0, "哈趣投影仪": 422.0, "哈趣newk2": 1.0, "哈趣k2高亮版": 101.0, "投影仪": 3427.0}, {"week": "2026年W21", "date_range": "5.18-5.24", "哈趣k3pro": 109.0, "哈趣h3pro": 129.0, "哈趣h3高亮版": 107.0, "哈趣q1promax": 200.0, "哈趣k3ultra max": 318.0, "哈趣q1pro": 1063.0, "哈趣h3ultra": 375.0, "哈趣h3ultramax": 922.0, "哈趣h3 ultra max": 18.0, "哈趣h3ultra max": 247.0, "哈趣q1": 195.0, "哈趣q1max": 77.0, "哈趣h3": 881.0, "哈趣k2pro": 32.0, "哈趣": 1018.0, "哈趣k2": 158.0, "哈趣k2pro高亮版": 10.0, "哈趣投影仪": 480.0, "哈趣newk2": null, "哈趣k2高亮版": 79.0, "投影仪": 3987.0}]}, "tm": {"months": ["1月", "2月", "3月", "4月", "5月", "6月", "7月", "8月", "11月", "12月"], "y2025": [17580.0, 19579.0, 13313.0, 9676.0, 15521.0, 22168.0, 17977.0, 15997.0, 22768.0, 27507.0], "y2026": [18515.0, 15250.0, 17374.0, 12737.0, 16692.0, null, null, null, null, null], "models": ["哈趣k3pro", "哈趣h3pro", "哈趣h3高亮版", "哈趣q1promax", "哈趣k3ultra max", "哈趣q1pro", "哈趣h3ultra", "哈趣h3ultramax", "哈趣q1", "哈趣q1max", "哈趣h3", "哈趣", "哈趣k2", "哈趣k2pro高亮版", "哈趣投影仪", "投影仪"], "weeks": [{"week": "2025年W6", "date_range": "2.3-2.9", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1186.0, "哈趣q1max": 0.0, "哈趣h3": 0.0, "哈趣": 892.0, "哈趣k2": 459.0, "哈趣k2pro高亮版": 367.0, "哈趣投影仪": 456.0, "投影仪": 3157.0}, {"week": "2025年W7", "date_range": "2.10-2.16", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1344.0, "哈趣q1max": 0.0, "哈趣h3": 0.0, "哈趣": 1209.0, "哈趣k2": 553.0, "哈趣k2pro高亮版": 428.0, "哈趣投影仪": 798.0, "投影仪": 4043.0}, {"week": "2025年W8", "date_range": "2.17-2.23", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1198.0, "哈趣q1max": 0.0, "哈趣h3": 0.0, "哈趣": 1121.0, "哈趣k2": 509.0, "哈趣k2pro高亮版": 473.0, "哈趣投影仪": 766.0, "投影仪": 3635.0}, {"week": "2025年W9", "date_range": "2.24-3.2", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 986.0, "哈趣q1max": 0.0, "哈趣h3": 0.0, "哈趣": 863.0, "哈趣k2": 374.0, "哈趣k2pro高亮版": 278.0, "哈趣投影仪": 513.0, "投影仪": 2366.0}, {"week": "2025年W10", "date_range": "3.3-3.9", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 944.0, "哈趣q1max": 0.0, "哈趣h3": 0.0, "哈趣": 850.0, "哈趣k2": 313.0, "哈趣k2pro高亮版": 291.0, "哈趣投影仪": 484.0, "投影仪": 1838.0}, {"week": "2025年W11", "date_range": "3.10-3.16", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 781.0, "哈趣q1max": 0.0, "哈趣h3": 0.0, "哈趣": 650.0, "哈趣k2": 299.0, "哈趣k2pro高亮版": 251.0, "哈趣投影仪": 378.0, "投影仪": 1660.0}, {"week": "2025年W12", "date_range": "3.19-3.23", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 675.0, "哈趣q1max": 0.0, "哈趣h3": 0.0, "哈趣": 459.0, "哈趣k2": 202.0, "哈趣k2pro高亮版": 218.0, "哈趣投影仪": 257.0, "投影仪": 1351.0}, {"week": "2025年W13", "date_range": "3.24-3.30", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 548.0, "哈趣q1max": 0.0, "哈趣h3": 0.0, "哈趣": 413.0, "哈趣k2": 179.0, "哈趣k2pro高亮版": 175.0, "哈趣投影仪": 251.0, "投影仪": 1311.0}, {"week": "2025年W14", "date_range": "3.31-4.6", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 569.0, "哈趣q1max": 0.0, "哈趣h3": 0.0, "哈趣": 464.0, "哈趣k2": 218.0, "哈趣k2pro高亮版": 179.0, "哈趣投影仪": 266.0, "投影仪": 1357.0}, {"week": "2025年W15", "date_range": "4.7-4.13", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 546.0, "哈趣q1max": 0.0, "哈趣h3": 0.0, "哈趣": 485.0, "哈趣k2": 171.0, "哈趣k2pro高亮版": 157.0, "哈趣投影仪": 265.0, "投影仪": 1357.0}, {"week": "2025年W16", "date_range": "4.14-4.20", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 513.0, "哈趣q1max": 0.0, "哈趣h3": 0.0, "哈趣": 547.0, "哈趣k2": 173.0, "哈趣k2pro高亮版": 147.0, "哈趣投影仪": 164.0, "投影仪": 1353.0}, {"week": "2025年W17", "date_range": "4.21-4.27", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 553.0, "哈趣q1max": 0.0, "哈趣h3": 0.0, "哈趣": 466.0, "哈趣k2": 148.0, "哈趣k2pro高亮版": 176.0, "哈趣投影仪": 249.0, "投影仪": 1878.0}, {"week": "2025年W18", "date_range": "4.28-5.4", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 417.0, "哈趣q1max": 0.0, "哈趣h3": 0.0, "哈趣": 385.0, "哈趣k2": 117.0, "哈趣k2pro高亮版": 93.0, "哈趣投影仪": 305.0, "投影仪": 1053.0}, {"week": "2025年W19", "date_range": "5.5-5.11", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 569.0, "哈趣q1max": 58.0, "哈趣h3": 0.0, "哈趣": 444.0, "哈趣k2": 150.0, "哈趣k2pro高亮版": 85.0, "哈趣投影仪": 324.0, "投影仪": 2196.0}, {"week": "2025年W20", "date_range": "5.12-5.18", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1406.0, "哈趣q1max": 265.0, "哈趣h3": 0.0, "哈趣": 775.0, "哈趣k2": 156.0, "哈趣k2pro高亮版": 156.0, "哈趣投影仪": 427.0, "投影仪": 2682.0}, {"week": "2025年W21", "date_range": "5.19-5.25", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1384.0, "哈趣q1max": 350.0, "哈趣h3": 98.0, "哈趣": 751.0, "哈趣k2": 197.0, "哈趣k2pro高亮版": 199.0, "哈趣投影仪": 419.0, "投影仪": 1477.0}, {"week": "2025年W22", "date_range": "5.26-6.1", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1394.0, "哈趣q1max": 461.0, "哈趣h3": 235.0, "哈趣": 794.0, "哈趣k2": 168.0, "哈趣k2pro高亮版": 172.0, "哈趣投影仪": 536.0, "投影仪": 1525.0}, {"week": "2025年W23", "date_range": "6.2-6.8", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1500.0, "哈趣q1max": 535.0, "哈趣h3": 484.0, "哈趣": 889.0, "哈趣k2": 203.0, "哈趣k2pro高亮版": 333.0, "哈趣投影仪": 715.0, "投影仪": 1482.0}, {"week": "2025年W24", "date_range": "6.9-6.15", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1707.0, "哈趣q1max": 422.0, "哈趣h3": 660.0, "哈趣": 901.0, "哈趣k2": 223.0, "哈趣k2pro高亮版": 358.0, "哈趣投影仪": 701.0, "投影仪": 1115.0}, {"week": "2025年W25", "date_range": "6.16-6.22", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1638.0, "哈趣q1max": 443.0, "哈趣h3": 754.0, "哈趣": 1073.0, "哈趣k2": 177.0, "哈趣k2pro高亮版": 271.0, "哈趣投影仪": 931.0, "投影仪": 1330.0}, {"week": "2025年W26", "date_range": "6.23-6.29", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1329.0, "哈趣q1max": 215.0, "哈趣h3": 375.0, "哈趣": 748.0, "哈趣k2": 138.0, "哈趣k2pro高亮版": 201.0, "哈趣投影仪": 567.0, "投影仪": 983.0}, {"week": "2025年W27", "date_range": "6.30-7.6", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1266.0, "哈趣q1max": 246.0, "哈趣h3": 392.0, "哈趣": 708.0, "哈趣k2": 159.0, "哈趣k2pro高亮版": 257.0, "哈趣投影仪": 599.0, "投影仪": 865.0}, {"week": "2025年W28", "date_range": "7.7-7.13", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1212.0, "哈趣q1max": 223.0, "哈趣h3": 491.0, "哈趣": 649.0, "哈趣k2": 116.0, "哈趣k2pro高亮版": 82.0, "哈趣投影仪": 594.0, "投影仪": 1057.0}, {"week": "2025年W29", "date_range": "7.14-7.20", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1353.0, "哈趣q1max": 230.0, "哈趣h3": 533.0, "哈趣": 765.0, "哈趣k2": 135.0, "哈趣k2pro高亮版": 199.0, "哈趣投影仪": 604.0, "投影仪": 888.0}, {"week": "2025年W30", "date_range": "7.21-7.27", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1271.0, "哈趣q1max": 245.0, "哈趣h3": 490.0, "哈趣": 805.0, "哈趣k2": 136.0, "哈趣k2pro高亮版": 170.0, "哈趣投影仪": 693.0, "投影仪": 807.0}, {"week": "2025年W31", "date_range": "7.28-8.3", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1082.0, "哈趣q1max": 242.0, "哈趣h3": 340.0, "哈趣": 462.0, "哈趣k2": 148.0, "哈趣k2pro高亮版": 156.0, "哈趣投影仪": 439.0, "投影仪": 711.0}, {"week": "2025年W32", "date_range": "8.4-8.10", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1179.0, "哈趣q1max": 299.0, "哈趣h3": 479.0, "哈趣": 645.0, "哈趣k2": 125.0, "哈趣k2pro高亮版": 187.0, "哈趣投影仪": 613.0, "投影仪": 983.0}, {"week": "2025年W33", "date_range": "8.11-8.17", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1316.0, "哈趣q1max": 420.0, "哈趣h3": 565.0, "哈趣": 955.0, "哈趣k2": 201.0, "哈趣k2pro高亮版": 355.0, "哈趣投影仪": 785.0, "投影仪": 1413.0}, {"week": "2025年W34", "date_range": "8.18-8.24", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1611.0, "哈趣q1max": 628.0, "哈趣h3": 632.0, "哈趣": 1128.0, "哈趣k2": 247.0, "哈趣k2pro高亮版": 611.0, "哈趣投影仪": 909.0, "投影仪": 1319.0}, {"week": "2025年W35", "date_range": "8.25-8.31", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1639.0, "哈趣q1max": 642.0, "哈趣h3": 551.0, "哈趣": 1065.0, "哈趣k2": 207.0, "哈趣k2pro高亮版": 365.0, "哈趣投影仪": 806.0, "投影仪": 1221.0}, {"week": "2025年W36", "date_range": "9.1-9.7", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 997.0, "哈趣q1max": 278.0, "哈趣h3": 399.0, "哈趣": 657.0, "哈趣k2": 158.0, "哈趣k2pro高亮版": 214.0, "哈趣投影仪": 657.0, "投影仪": 884.0}, {"week": "2025年W37", "date_range": "9.8-9.14", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1013.0, "哈趣q1max": 202.0, "哈趣h3": 433.0, "哈趣": 642.0, "哈趣k2": 143.0, "哈趣k2pro高亮版": 220.0, "哈趣投影仪": 556.0, "投影仪": 1978.0}, {"week": "2025年W38", "date_range": "9.15-9.21", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1164.0, "哈趣q1max": 218.0, "哈趣h3": 352.0, "哈趣": 665.0, "哈趣k2": 167.0, "哈趣k2pro高亮版": 198.0, "哈趣投影仪": 622.0, "投影仪": 2121.0}, {"week": "2025年W39", "date_range": "9.22-9.28", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1226.0, "哈趣q1max": 210.0, "哈趣h3": 320.0, "哈趣": 670.0, "哈趣k2": 138.0, "哈趣k2pro高亮版": 157.0, "哈趣投影仪": 621.0, "投影仪": 2068.0}, {"week": "2025年W40", "date_range": "9.29-10.5", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1290.0, "哈趣q1max": 197.0, "哈趣h3": 309.0, "哈趣": 699.0, "哈趣k2": 153.0, "哈趣k2pro高亮版": 185.0, "哈趣投影仪": 563.0, "投影仪": 2055.0}, {"week": "2025年W41", "date_range": "10.6-10.12", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 0.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 995.0, "哈趣q1max": 142.0, "哈趣h3": 351.0, "哈趣": 692.0, "哈趣k2": 150.0, "哈趣k2pro高亮版": 168.0, "哈趣投影仪": 403.0, "投影仪": 1721.0}, {"week": "2025年W42", "date_range": "10.13-10.19", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 80.0, "哈趣h3ultra": 0.0, "哈趣h3ultramax": 0.0, "哈趣q1": 1269.0, "哈趣q1max": 179.0, "哈趣h3": 683.0, "哈趣": 944.0, "哈趣k2": 192.0, "哈趣k2pro高亮版": 158.0, "哈趣投影仪": 592.0, "投影仪": 2367.0}, {"week": "2025年W43", "date_range": "10.20-10.26", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 167.0, "哈趣h3ultra": 165.0, "哈趣h3ultramax": 18.0, "哈趣q1": 1615.0, "哈趣q1max": 225.0, "哈趣h3": 896.0, "哈趣": 1084.0, "哈趣k2": 198.0, "哈趣k2pro高亮版": 165.0, "哈趣投影仪": 648.0, "投影仪": 2759.0}, {"week": "2025年W44", "date_range": "10.27-11.2", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 170.0, "哈趣h3ultra": 202.0, "哈趣h3ultramax": 46.0, "哈趣q1": 1079.0, "哈趣q1max": 201.0, "哈趣h3": 662.0, "哈趣": 841.0, "哈趣k2": 171.0, "哈趣k2pro高亮版": 106.0, "哈趣投影仪": 614.0, "投影仪": 1798.0}, {"week": "2025年W45", "date_range": "11.3-11.9", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 303.0, "哈趣h3ultra": 233.0, "哈趣h3ultramax": 27.0, "哈趣q1": 1373.0, "哈趣q1max": 226.0, "哈趣h3": 764.0, "哈趣": 949.0, "哈趣k2": 177.0, "哈趣k2pro高亮版": 142.0, "哈趣投影仪": 645.0, "投影仪": 1656.0}, {"week": "2025年W46", "date_range": "11.10-11.16", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 502.0, "哈趣h3ultra": 240.0, "哈趣h3ultramax": 34.0, "哈趣q1": 1899.0, "哈趣q1max": 291.0, "哈趣h3": 976.0, "哈趣": 1109.0, "哈趣k2": 198.0, "哈趣k2pro高亮版": 115.0, "哈趣投影仪": 677.0, "投影仪": 2057.0}, {"week": "2025年W47", "date_range": "11.17-11.23", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 494.0, "哈趣h3ultra": 68.0, "哈趣h3ultramax": 51.0, "哈趣q1": 1344.0, "哈趣q1max": 233.0, "哈趣h3": 850.0, "哈趣": 646.0, "哈趣k2": 136.0, "哈趣k2pro高亮版": 67.0, "哈趣投影仪": 434.0, "投影仪": 1294.0}, {"week": "2025年W48", "date_range": "11.24-11.30", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 292.0, "哈趣h3ultra": 81.0, "哈趣h3ultramax": 47.0, "哈趣q1": 1162.0, "哈趣q1max": 272.0, "哈趣h3": 787.0, "哈趣": 754.0, "哈趣k2": 163.0, "哈趣k2pro高亮版": 73.0, "哈趣投影仪": 536.0, "投影仪": 1182.0}, {"week": "2025年W49", "date_range": "12.1-12.7", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 541.0, "哈趣h3ultra": 72.0, "哈趣h3ultramax": 115.0, "哈趣q1": 1032.0, "哈趣q1max": 313.0, "哈趣h3": 975.0, "哈趣": 734.0, "哈趣k2": 143.0, "哈趣k2pro高亮版": 87.0, "哈趣投影仪": 535.0, "投影仪": 1248.0}, {"week": "2025年W50", "date_range": "12.8-12.14", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 981.0, "哈趣h3ultra": 134.0, "哈趣h3ultramax": 237.0, "哈趣q1": 1490.0, "哈趣q1max": 465.0, "哈趣h3": 1336.0, "哈趣": 1285.0, "哈趣k2": 211.0, "哈趣k2pro高亮版": 91.0, "哈趣投影仪": 119.0, "投影仪": 1875.0}, {"week": "2025年W51", "date_range": "12.15-12.21", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 864.0, "哈趣h3ultra": 105.0, "哈趣h3ultramax": 175.0, "哈趣q1": 1317.0, "哈趣q1max": 243.0, "哈趣h3": 1024.0, "哈趣": 1111.0, "哈趣k2": 214.0, "哈趣k2pro高亮版": 87.0, "哈趣投影仪": 297.0, "投影仪": 1515.0}, {"week": "2025年W52", "date_range": "12.22-12.28", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 883.0, "哈趣h3ultra": 91.0, "哈趣h3ultramax": 121.0, "哈趣q1": 1380.0, "哈趣q1max": 307.0, "哈趣h3": 804.0, "哈趣": 1167.0, "哈趣k2": 242.0, "哈趣k2pro高亮版": 69.0, "哈趣投影仪": 412.0, "投影仪": 1479.0}, {"week": "2026年W1", "date_range": "12.29-1.4", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 645.0, "哈趣h3ultra": 86.0, "哈趣h3ultramax": 130.0, "哈趣q1": 1092.0, "哈趣q1max": 296.0, "哈趣h3": 738.0, "哈趣": 969.0, "哈趣k2": 212.0, "哈趣k2pro高亮版": 89.0, "哈趣投影仪": 613.0, "投影仪": 1586.0}, {"week": "2026年W2", "date_range": "1.5-1.11", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 0.0, "哈趣q1pro": 305.0, "哈趣h3ultra": 97.0, "哈趣h3ultramax": 93.0, "哈趣q1": 524.0, "哈趣q1max": 137.0, "哈趣h3": 524.0, "哈趣": 715.0, "哈趣k2": 175.0, "哈趣k2pro高亮版": 112.0, "哈趣投影仪": 592.0, "投影仪": 1164.0}, {"week": "2026年W3", "date_range": "1.12-1.18", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 43.0, "哈趣q1pro": 223.0, "哈趣h3ultra": 68.0, "哈趣h3ultramax": 235.0, "哈趣q1": 419.0, "哈趣q1max": 103.0, "哈趣h3": 358.0, "哈趣": 724.0, "哈趣k2": 124.0, "哈趣k2pro高亮版": 64.0, "哈趣投影仪": 564.0, "投影仪": 1065.0}, {"week": "2026年W4", "date_range": "1.19-1.25", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 119.0, "哈趣q1pro": 216.0, "哈趣h3ultra": 96.0, "哈趣h3ultramax": 139.0, "哈趣q1": 416.0, "哈趣q1max": 64.0, "哈趣h3": 429.0, "哈趣": 827.0, "哈趣k2": 143.0, "哈趣k2pro高亮版": 83.0, "哈趣投影仪": 644.0, "投影仪": 1094.0}, {"week": "2026年W5", "date_range": "1.26-2.1", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 80.0, "哈趣q1pro": 555.0, "哈趣h3ultra": 96.0, "哈趣h3ultramax": 108.0, "哈趣q1": 569.0, "哈趣q1max": 97.0, "哈趣h3": 428.0, "哈趣": 766.0, "哈趣k2": 131.0, "哈趣k2pro高亮版": 135.0, "哈趣投影仪": 780.0, "投影仪": 1224.0}, {"week": "2026年W6", "date_range": "2.2-2.8", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 21.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 63.0, "哈趣q1pro": 589.0, "哈趣h3ultra": 119.0, "哈趣h3ultramax": 116.0, "哈趣q1": 563.0, "哈趣q1max": 164.0, "哈趣h3": 430.0, "哈趣": 755.0, "哈趣k2": 153.0, "哈趣k2pro高亮版": 190.0, "哈趣投影仪": 732.0, "投影仪": 1227.0}, {"week": "2026年W7", "date_range": "2.9-2.15", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 24.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 43.0, "哈趣q1pro": 292.0, "哈趣h3ultra": 70.0, "哈趣h3ultramax": 82.0, "哈趣q1": 261.0, "哈趣q1max": 83.0, "哈趣h3": 384.0, "哈趣": 524.0, "哈趣k2": 87.0, "哈趣k2pro高亮版": 60.0, "哈趣投影仪": 552.0, "投影仪": 1133.0}, {"week": "2026年W8", "date_range": "2.16-2.22", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 19.0, "哈趣q1promax": 0.0, "哈趣k3ultra max": 39.0, "哈趣q1pro": 145.0, "哈趣h3ultra": 53.0, "哈趣h3ultramax": 39.0, "哈趣q1": 181.0, "哈趣q1max": 70.0, "哈趣h3": 312.0, "哈趣": 424.0, "哈趣k2": 63.0, "哈趣k2pro高亮版": 58.0, "哈趣投影仪": 455.0, "投影仪": 948.0}, {"week": "2026年W9", "date_range": "2.23-3.1", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 35.0, "哈趣q1promax": 28.0, "哈趣k3ultra max": 80.0, "哈趣q1pro": 300.0, "哈趣h3ultra": 77.0, "哈趣h3ultramax": 80.0, "哈趣q1": 313.0, "哈趣q1max": 136.0, "哈趣h3": 463.0, "哈趣": 748.0, "哈趣k2": 127.0, "哈趣k2pro高亮版": 129.0, "哈趣投影仪": 534.0, "投影仪": 1678.0}, {"week": "2026年W10", "date_range": "3.2-3.8", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 49.0, "哈趣q1promax": 160.0, "哈趣k3ultra max": 80.0, "哈趣q1pro": 335.0, "哈趣h3ultra": 62.0, "哈趣h3ultramax": 93.0, "哈趣q1": 284.0, "哈趣q1max": 144.0, "哈趣h3": 544.0, "哈趣": 684.0, "哈趣k2": 157.0, "哈趣k2pro高亮版": 301.0, "哈趣投影仪": 563.0, "投影仪": 1502.0}, {"week": "2026年W11", "date_range": "3.9-3.15", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 45.0, "哈趣q1promax": 147.0, "哈趣k3ultra max": 49.0, "哈趣q1pro": 332.0, "哈趣h3ultra": 48.0, "哈趣h3ultramax": 136.0, "哈趣q1": 258.0, "哈趣q1max": 80.0, "哈趣h3": 408.0, "哈趣": 598.0, "哈趣k2": 105.0, "哈趣k2pro高亮版": 79.0, "哈趣投影仪": 531.0, "投影仪": 1275.0}, {"week": "2026年W12", "date_range": "3.16-3.22", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 43.0, "哈趣q1promax": 172.0, "哈趣k3ultra max": 126.0, "哈趣q1pro": 363.0, "哈趣h3ultra": 55.0, "哈趣h3ultramax": 142.0, "哈趣q1": 319.0, "哈趣q1max": 61.0, "哈趣h3": 411.0, "哈趣": 629.0, "哈趣k2": 109.0, "哈趣k2pro高亮版": 31.0, "哈趣投影仪": 595.0, "投影仪": 1267.0}, {"week": "2026年W13", "date_range": "3.23-3.29", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 37.0, "哈趣q1promax": 170.0, "哈趣k3ultra max": 52.0, "哈趣q1pro": 314.0, "哈趣h3ultra": 62.0, "哈趣h3ultramax": 82.0, "哈趣q1": 244.0, "哈趣q1max": 10.0, "哈趣h3": 371.0, "哈趣": 514.0, "哈趣k2": 102.0, "哈趣k2pro高亮版": 20.0, "哈趣投影仪": 558.0, "投影仪": 1080.0}, {"week": "2026年W14", "date_range": "3.30-4.5", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 31.0, "哈趣q1promax": 130.0, "哈趣k3ultra max": 28.0, "哈趣q1pro": 268.0, "哈趣h3ultra": 36.0, "哈趣h3ultramax": 84.0, "哈趣q1": 179.0, "哈趣q1max": 46.0, "哈趣h3": 330.0, "哈趣": 427.0, "哈趣k2": 65.0, "哈趣k2pro高亮版": 27.0, "哈趣投影仪": 432.0, "投影仪": 1123.0}, {"week": "2026年W15", "date_range": "4.6-4.12", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 33.0, "哈趣q1promax": 108.0, "哈趣k3ultra max": 27.0, "哈趣q1pro": 269.0, "哈趣h3ultra": 45.0, "哈趣h3ultramax": 66.0, "哈趣q1": 180.0, "哈趣q1max": 48.0, "哈趣h3": 317.0, "哈趣": 443.0, "哈趣k2": 54.0, "哈趣k2pro高亮版": 9.0, "哈趣投影仪": 440.0, "投影仪": 1179.0}, {"week": "2026年W16", "date_range": "4.13-4.19", "哈趣k3pro": 0.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 0.0, "哈趣q1promax": 84.0, "哈趣k3ultra max": 60.0, "哈趣q1pro": 264.0, "哈趣h3ultra": 61.0, "哈趣h3ultramax": 95.0, "哈趣q1": 143.0, "哈趣q1max": 24.0, "哈趣h3": 310.0, "哈趣": 422.0, "哈趣k2": 117.0, "哈趣k2pro高亮版": 12.0, "哈趣投影仪": 443.0, "投影仪": 1096.0}, {"week": "2026年W17", "date_range": "4.20-4.26", "哈趣k3pro": 43.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 43.0, "哈趣q1promax": 79.0, "哈趣k3ultra max": 45.0, "哈趣q1pro": 310.0, "哈趣h3ultra": 57.0, "哈趣h3ultramax": 91.0, "哈趣q1": 180.0, "哈趣q1max": 37.0, "哈趣h3": 323.0, "哈趣": 452.0, "哈趣k2": 98.0, "哈趣k2pro高亮版": 29.0, "哈趣投影仪": 569.0, "投影仪": 853.0}, {"week": "2026年W18", "date_range": "4.27-5.3", "哈趣k3pro": 30.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 45.0, "哈趣q1promax": 68.0, "哈趣k3ultra max": 67.0, "哈趣q1pro": 402.0, "哈趣h3ultra": 35.0, "哈趣h3ultramax": 215.0, "哈趣q1": 242.0, "哈趣q1max": 3.0, "哈趣h3": 317.0, "哈趣": 457.0, "哈趣k2": 114.0, "哈趣k2pro高亮版": 26.0, "哈趣投影仪": 354.0, "投影仪": 1035.0}, {"week": "2026年W19", "date_range": "5.4-5.10", "哈趣k3pro": 48.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 29.0, "哈趣q1promax": 78.0, "哈趣k3ultra max": 70.0, "哈趣q1pro": 350.0, "哈趣h3ultra": 92.0, "哈趣h3ultramax": 293.0, "哈趣q1": 252.0, "哈趣q1max": 31.0, "哈趣h3": 368.0, "哈趣": 433.0, "哈趣k2": 135.0, "哈趣k2pro高亮版": 36.0, "哈趣投影仪": 575.0, "投影仪": 895.0}, {"week": "2026年W20", "date_range": "5.11-5.17", "哈趣k3pro": 51.0, "哈趣h3pro": 0.0, "哈趣h3高亮版": 59.0, "哈趣q1promax": 115.0, "哈趣k3ultra max": 54.0, "哈趣q1pro": 372.0, "哈趣h3ultra": 131.0, "哈趣h3ultramax": 276.0, "哈趣q1": 233.0, "哈趣q1max": 36.0, "哈趣h3": 412.0, "哈趣": 572.0, "哈趣k2": 112.0, "哈趣k2pro高亮版": 21.0, "哈趣投影仪": 577.0, "投影仪": 1046.0}, {"week": "2026年W21", "date_range": "5.18-5.24", "哈趣k3pro": 56.0, "哈趣h3pro": 97.0, "哈趣h3高亮版": 53.0, "哈趣q1promax": 142.0, "哈趣k3ultra max": 63.0, "哈趣q1pro": 354.0, "哈趣h3ultra": 137.0, "哈趣h3ultramax": 307.0, "哈趣q1": 220.0, "哈趣q1max": 37.0, "哈趣h3": 529.0, "哈趣": 653.0, "哈趣k2": 115.0, "哈趣k2pro高亮版": 5.0, "哈趣投影仪": 568.0, "投影仪": 1108.0}]}};
+
+const STACK_COLORS = [
+  '#c8202c','#e85c3a','#d4a574','#8b6f47','#5a7a8a',
+  '#2e7d4f','#7a5c8a','#a8533a','#3a5a7a','#8a7a4a',
+  '#6a4a3a','#4a6a8a','#9a4a5a','#5a8a6a','#8a5a7a',
+  '#7a3a4a','#3a7a5a','#a87a3a','#5a4a8a','#7a8a4a',
+  '#3a4a7a','#8a4a3a'
+];
+
+const fmt = n => n == null ? '—' : n.toLocaleString('zh-CN', {maximumFractionDigits: 0});
+const pct = n => n == null ? '—' : (n >= 0 ? '+' : '') + (n * 100).toFixed(1) + '%';
+
+// hex -> {h,s,l}
+function hexToHsl(hex) {
+  const r = parseInt(hex.slice(1,3),16)/255;
+  const g = parseInt(hex.slice(3,5),16)/255;
+  const b = parseInt(hex.slice(5,7),16)/255;
+  const max = Math.max(r,g,b), min = Math.min(r,g,b);
+  let h, s, l = (max+min)/2;
+  if (max === min) { h = s = 0; }
+  else {
+    const d = max - min;
+    s = l > 0.5 ? d/(2-max-min) : d/(max+min);
+    switch(max) {
+      case r: h = (g-b)/d + (g<b?6:0); break;
+      case g: h = (b-r)/d + 2; break;
+      case b: h = (r-g)/d + 4; break;
+    }
+    h /= 6;
+  }
+  return {h: h*360, s: s*100, l: l*100};
+}
+// returns css hsl string with adjusted lightness/saturation
+function shadeColor(hex, mode) {
+  const {h, s, l} = hexToHsl(hex);
+  if (mode === 'light') {
+    // 2025: 浅、低饱和、偏暖灰
+    const newL = Math.min(82, l + (82 - l) * 0.55);
+    const newS = Math.max(20, s * 0.5);
+    return `hsl(${h.toFixed(0)}, ${newS.toFixed(0)}%, ${newL.toFixed(0)}%)`;
+  } else {
+    // 2026: 深、高饱和
+    const newL = Math.max(28, l * 0.75);
+    const newS = Math.min(85, s * 1.15);
+    return `hsl(${h.toFixed(0)}, ${newS.toFixed(0)}%, ${newL.toFixed(0)}%)`;
+  }
+}
+
+function weekNum(wk) {
+  const m = wk.match(/(\d{4})年W(\d+)/);
+  return m ? {year: +m[1], w: +m[2]} : null;
+}
+
+// platform switcher
+document.querySelectorAll('.platform-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.platform-tab').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.platform-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('content-' + btn.dataset.platform).classList.add('active');
+  });
+});
+
+const jdWeeks = DATA.jd.weeks;
+document.getElementById('dataRange').textContent = jdWeeks[0].week + ' → ' + jdWeeks[jdWeeks.length-1].week;
+
+// =====================================================================
+// MONTHLY (unchanged)
+// =====================================================================
+function renderMonthly(key, canvasId, statsId, accent) {
+  const d = DATA[key];
+  const months = d.months;
+  const y25 = d.y2025;
+  const y26 = d.y2026;
+
+  const yoy = months.map((_,i) => {
+    if (y25[i] != null && y26[i] != null && y25[i] !== 0) {
+      return (y26[i] - y25[i]) / y25[i];
+    }
+    return null;
+  });
+
+  let s25 = 0, s26 = 0, count = 0;
+  let totalY25 = 0, totalY26 = 0;
+  y25.forEach(v => { if (v != null) totalY25 += v; });
+  y26.forEach(v => { if (v != null) totalY26 += v; });
+  months.forEach((_,i) => {
+    if (y25[i] != null && y26[i] != null) {
+      s25 += y25[i]; s26 += y26[i]; count++;
+    }
+  });
+  // ===== 26年近4周（来自型号周数据，排除"投影仪"） =====
+  const weeks = d.weeks;
+  const excludeModel = '投影仪';
+  const modelsKept = d.models.filter(m => m !== excludeModel);
+  const weekRowSum = (w) => modelsKept.reduce((s, m) => s + (w[m] || 0), 0);
+
+  const w26 = weeks.filter(w => weekNum(w.week) && weekNum(w.week).year === 2026);
+  const last4_26 = w26.slice(-4);
+  const last4WNums = last4_26.map(w => weekNum(w.week).w);
+  const last4_25 = weeks.filter(w => {
+    const wn = weekNum(w.week);
+    return wn && wn.year === 2025 && last4WNums.includes(wn.w);
+  });
+  const sum4_26 = last4_26.reduce((s, w) => s + weekRowSum(w), 0);
+  const sum4_25 = last4_25.reduce((s, w) => s + weekRowSum(w), 0);
+  const yoy4 = sum4_25 > 0 ? (sum4_26 - sum4_25) / sum4_25 : null;
+  const last4Label = last4WNums.length ? `W${last4WNums[0]}–W${last4WNums[last4WNums.length-1]}` : '—';
+
+  // ===== 26年近1周（同上口径，只取最后1周） =====
+  const last1_26 = w26.slice(-1);
+  const last1WNums = last1_26.map(w => weekNum(w.week).w);
+  const last1_25 = weeks.filter(w => {
+    const wn = weekNum(w.week);
+    return wn && wn.year === 2025 && last1WNums.includes(wn.w);
+  });
+  const sum1_26 = last1_26.reduce((s, w) => s + weekRowSum(w), 0);
+  const sum1_25 = last1_25.reduce((s, w) => s + weekRowSum(w), 0);
+  const yoy1 = sum1_25 > 0 ? (sum1_26 - sum1_25) / sum1_25 : null;
+  const last1Label = last1WNums.length ? `W${last1WNums[0]}` : '—';
+
+  // ===== 26年本月（月度表最新有数据的月） =====
+  let latestIdx = -1;
+  for (let i = y26.length - 1; i >= 0; i--) {
+    if (y26[i] != null) { latestIdx = i; break; }
+  }
+  const monthName = latestIdx >= 0 ? months[latestIdx] : '—';
+  const month26 = latestIdx >= 0 ? y26[latestIdx] : null;
+  const month25 = latestIdx >= 0 ? y25[latestIdx] : null;
+  const yoyMonth = (month25 != null && month25 > 0 && month26 != null) ? (month26 - month25) / month25 : null;
+
+  document.getElementById(statsId).innerHTML = `
+    <div class="stat">
+      <div class="stat-label">2025 累计</div>
+      <div class="stat-value">${fmt(totalY25)}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">2026 累计</div>
+      <div class="stat-value">${fmt(totalY26)}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">26 年近 4 周</div>
+      <div class="stat-value">${fmt(sum4_26)}</div>
+      <div class="stat-delta ${yoy4==null?'neu':yoy4>=0?'pos':'neg'}">同比 ${pct(yoy4)} · ${last4Label}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">26 年近 1 周</div>
+      <div class="stat-value">${fmt(sum1_26)}</div>
+      <div class="stat-delta ${yoy1==null?'neu':yoy1>=0?'pos':'neg'}">同比 ${pct(yoy1)} · ${last1Label}</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">26 年本月</div>
+      <div class="stat-value">${fmt(month26)}</div>
+      <div class="stat-delta ${yoyMonth==null?'neu':yoyMonth>=0?'pos':'neg'}">同比 ${pct(yoyMonth)} · ${monthName}</div>
+    </div>
+  `;
+
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: months,
+      datasets: [
+        { type: 'bar', label: '2025', data: y25,
+          backgroundColor: 'rgba(184,168,136,0.85)', borderColor: '#8a7a5a',
+          borderWidth: 1, yAxisID: 'y', order: 2 },
+        { type: 'bar', label: '2026', data: y26,
+          backgroundColor: accent, borderColor: '#1a1a1a',
+          borderWidth: 1, yAxisID: 'y', order: 2 },
+        { type: 'line', label: '同比 %',
+          data: yoy.map(v => v == null ? null : v * 100),
+          borderColor: '#1a1a1a', backgroundColor: '#1a1a1a',
+          borderWidth: 2, pointRadius: 5, pointHoverRadius: 7,
+          pointBackgroundColor: yoy.map(v => v == null ? '#999' : v >= 0 ? '#2e7d4f' : '#c8202c'),
+          pointBorderColor: '#1a1a1a', yAxisID: 'y1',
+          tension: 0.2, spanGaps: true, order: 1 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { family: "'Noto Serif SC'", size: 12 } } },
+        tooltip: {
+          backgroundColor: '#1a1a1a', padding: 12,
+          titleFont: { family: "'JetBrains Mono'", size: 12 },
+          bodyFont: { family: "'JetBrains Mono'", size: 12 },
+          callbacks: {
+            label: (c) => {
+              if (c.dataset.label === '同比 %') {
+                return '同比: ' + (c.parsed.y == null ? '—' : c.parsed.y.toFixed(1) + '%');
+              }
+              return c.dataset.label + ': ' + fmt(c.parsed.y);
+            }
+          }
+        }
+      },
+      scales: {
+        y: { beginAtZero: true, title: { display: true, text: '搜索量', font: { family: "'JetBrains Mono'", size: 11 } },
+             grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { family: "'JetBrains Mono'" } } },
+        y1: { position: 'right', title: { display: true, text: '同比 %', font: { family: "'JetBrains Mono'", size: 11 } },
+              grid: { drawOnChartArea: false },
+              ticks: { font: { family: "'JetBrains Mono'" }, callback: v => v + '%' } },
+        x: { ticks: { font: { family: "'Noto Serif SC'" } }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+renderMonthly('jd', 'jd-monthly', 'jd-stats', '#c8202c');
+renderMonthly('tm', 'tm-monthly', 'tm-stats', '#e85c3a');
+
+// =====================================================================
+// MODEL SELECTOR STATE - two independent selections per platform
+// =====================================================================
+const SEL = {
+  'jd-stack': new Set(),
+  'jd-yoy':   new Set(),
+  'tm-stack': new Set(),
+  'tm-yoy':   new Set()
+};
+
+const CHARTS = {};
+const YOY_RANGE = { 'jd-yoy': null, 'tm-yoy': null };  // null = all, else {start, end}
+
+function platformOf(target) { return target.startsWith('jd') ? 'jd' : 'tm'; }
+
+function computeTopModels(key, n) {
+  const d = DATA[key];
+  const totals = {};
+  d.models.forEach(m => totals[m] = 0);
+  d.weeks.forEach(w => {
+    d.models.forEach(m => { totals[m] += (w[m] || 0); });
+  });
+  return d.models.slice().sort((a,b) => totals[b] - totals[a]).slice(0, n);
+}
+
+function renderChips(target) {
+  const key = platformOf(target);
+  const d = DATA[key];
+  const container = document.getElementById(target + '-chips');
+  container.innerHTML = '';
+  d.models.forEach(m => {
+    const chip = document.createElement('div');
+    chip.className = 'chip';
+    chip.textContent = m;
+    chip.dataset.model = m;
+    if (SEL[target].has(m)) chip.classList.add('active');
+    chip.addEventListener('click', () => {
+      if (SEL[target].has(m)) { SEL[target].delete(m); chip.classList.remove('active'); }
+      else { SEL[target].add(m); chip.classList.add('active'); }
+      if (target.endsWith('-stack')) updateStackChart(key);
+      else updateYoyChart(key);
+    });
+    container.appendChild(chip);
+  });
+}
+
+function setChipState(target) {
+  document.querySelectorAll('#' + target + '-chips .chip').forEach(c => {
+    if (SEL[target].has(c.dataset.model)) c.classList.add('active');
+    else c.classList.remove('active');
+  });
+}
+
+// =====================================================================
+// STACK CHART (weekly per-model stack)
+// =====================================================================
+function updateStackChart(key) {
+  const d = DATA[key];
+  const target = key + '-stack';
+  const selected = Array.from(SEL[target]);
+  const weeks = d.weeks;
+  const weekLabels = weeks.map(w => w.week.replace('年W', ' W'));
+
+  const datasets = selected.map((m, i) => ({
+    label: m,
+    data: weeks.map(w => w[m] || 0),
+    backgroundColor: STACK_COLORS[i % STACK_COLORS.length],
+    borderColor: '#fff',
+    borderWidth: 0.5,
+    stack: 'wk'
+  }));
+
+  if (CHARTS[target]) CHARTS[target].destroy();
+  CHARTS[target] = new Chart(document.getElementById(target).getContext('2d'), {
+    type: 'bar',
+    data: { labels: weekLabels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { family: "'Noto Serif SC'", size: 11 }, boxWidth: 12, padding: 8 } },
+        tooltip: {
+          backgroundColor: '#1a1a1a', padding: 12,
+          titleFont: { family: "'JetBrains Mono'", size: 12 },
+          bodyFont: { family: "'JetBrains Mono'", size: 11 },
+          callbacks: {
+            title: (items) => {
+              const idx = items[0].dataIndex;
+              return weeks[idx].week + '  ' + weeks[idx].date_range;
+            },
+            footer: (items) => {
+              let sum = 0;
+              items.forEach(it => sum += it.parsed.y);
+              return '合计: ' + fmt(sum);
+            }
+          }
+        }
+      },
+      scales: {
+        x: { stacked: true, grid: { display: false },
+             ticks: { font: { family: "'JetBrains Mono'", size: 9 },
+                      maxRotation: 90, minRotation: 60, autoSkip: true, maxTicksLimit: 30 } },
+        y: { stacked: true, beginAtZero: true,
+             grid: { color: 'rgba(0,0,0,0.05)' },
+             ticks: { font: { family: "'JetBrains Mono'" } } }
+      }
+    }
+  });
+}
+
+// =====================================================================
+// YOY CHART (paired stacks per overlapping week + yoy line)
+// =====================================================================
+function getOverlapWeeks(key) {
+  const d = DATA[key];
+  const buckets = {};
+  d.weeks.forEach((w, idx) => {
+    const wn = weekNum(w.week);
+    if (!wn) return;
+    if (!buckets[wn.w]) buckets[wn.w] = {};
+    buckets[wn.w][wn.year] = idx;
+  });
+  return Object.keys(buckets)
+    .filter(w => buckets[w][2025] != null && buckets[w][2026] != null)
+    .map(Number).sort((a,b)=>a-b)
+    .map(w => ({ w, idx25: buckets[w][2025], idx26: buckets[w][2026] }));
+}
+
+function populateYoyRangeSelects(key) {
+  const overlaps = getOverlapWeeks(key);
+  const target = key + '-yoy';
+  const startSel = document.getElementById(target + '-start');
+  const endSel = document.getElementById(target + '-end');
+  startSel.innerHTML = '';
+  endSel.innerHTML = '';
+  overlaps.forEach(o => {
+    startSel.add(new Option('W' + o.w, o.w));
+    endSel.add(new Option('W' + o.w, o.w));
+  });
+  startSel.value = overlaps[0].w;
+  endSel.value = overlaps[overlaps.length - 1].w;
+  startSel.addEventListener('change', () => {
+    clearRangeButtonActive(target);
+    if (+startSel.value > +endSel.value) endSel.value = startSel.value;
+    YOY_RANGE[target] = { start: +startSel.value, end: +endSel.value };
+    updateYoyChart(key);
+  });
+  endSel.addEventListener('change', () => {
+    clearRangeButtonActive(target);
+    if (+endSel.value < +startSel.value) startSel.value = endSel.value;
+    YOY_RANGE[target] = { start: +startSel.value, end: +endSel.value };
+    updateYoyChart(key);
+  });
+}
+
+function clearRangeButtonActive(target) {
+  document.querySelectorAll(`button[data-target="${target}"][data-range]`).forEach(b => b.classList.remove('active'));
+}
+
+function updateYoyChart(key) {
+  const d = DATA[key];
+  const target = key + '-yoy';
+  const selected = Array.from(SEL[target]);
+  let overlaps = getOverlapWeeks(key);
+
+  // apply range
+  const range = YOY_RANGE[target];
+  if (range) {
+    overlaps = overlaps.filter(o => o.w >= range.start && o.w <= range.end);
+  }
+
+  // labels: just week numbers (W6, W7, ...). within each week we'll
+  // have two stacked bars sharing the same x-tick: one stack="y25", one stack="y26".
+  // chart.js places different stacks side-by-side under the same category,
+  // which gives us "year bars touching within a week, gap between weeks".
+  const labels = overlaps.map(o => 'W' + o.w);
+
+  // each model produces TWO datasets: 2025 stack and 2026 stack.
+  // Same color so the model is visually identical across both years.
+  const datasets = [];
+  selected.forEach((m, i) => {
+    const color = STACK_COLORS[i % STACK_COLORS.length];
+    datasets.push({
+      type: 'bar',
+      label: m,
+      data: overlaps.map(o => d.weeks[o.idx25][m] || 0),
+      backgroundColor: color,
+      borderColor: '#fff',
+      borderWidth: 0,
+      stack: 'y25',
+      yAxisID: 'y',
+      order: 2,
+      categoryPercentage: 0.92,
+      barPercentage: 1.0
+    });
+    datasets.push({
+      type: 'bar',
+      label: m + ' (2026)',
+      data: overlaps.map(o => d.weeks[o.idx26][m] || 0),
+      backgroundColor: color,
+      borderColor: '#fff',
+      borderWidth: 0,
+      stack: 'y26',
+      yAxisID: 'y',
+      order: 2,
+      categoryPercentage: 0.92,
+      barPercentage: 1.0,
+      _hideFromLegend: true
+    });
+  });
+
+  // YoY line: one point per week (not per slot since labels are now per-week)
+  const yoyLine = [];
+  overlaps.forEach(o => {
+    let s25 = 0, s26 = 0;
+    selected.forEach(m => {
+      s25 += d.weeks[o.idx25][m] || 0;
+      s26 += d.weeks[o.idx26][m] || 0;
+    });
+    yoyLine.push(s25 > 0 ? ((s26 - s25) / s25) * 100 : null);
+  });
+
+  datasets.push({
+    type: 'line',
+    label: '同比 %',
+    data: yoyLine,
+    borderColor: '#c8202c',
+    backgroundColor: '#c8202c',
+    borderWidth: 2,
+    pointRadius: 5,
+    pointHoverRadius: 7,
+    pointBackgroundColor: yoyLine.map(v => v == null ? 'transparent' : v >= 0 ? '#2e7d4f' : '#c8202c'),
+    pointBorderColor: '#1a1a1a',
+    yAxisID: 'y1',
+    tension: 0.2,
+    spanGaps: true,
+    order: 1
+  });
+
+  if (CHARTS[target]) CHARTS[target].destroy();
+  CHARTS[target] = new Chart(document.getElementById(target).getContext('2d'), {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            font: { family: "'Noto Serif SC'", size: 11 }, boxWidth: 12, padding: 8,
+            filter: (item, chartData) => {
+              const ds = chartData.datasets[item.datasetIndex];
+              return !ds._hideFromLegend;
+            }
+          },
+          onClick: (e, item, legend) => {
+            // toggle BOTH the 2025 and 2026 dataset for this model together
+            const ci = legend.chart;
+            const baseIdx = item.datasetIndex;
+            const baseDs = ci.data.datasets[baseIdx];
+            const visible = ci.isDatasetVisible(baseIdx);
+            ci.setDatasetVisibility(baseIdx, !visible);
+            // paired dataset is the next one (its label === baseDs.label + ' (2026)')
+            const pairedIdx = ci.data.datasets.findIndex(
+              (ds, i) => i !== baseIdx && ds._hideFromLegend && ds.label === baseDs.label + ' (2026)'
+            );
+            if (pairedIdx >= 0) ci.setDatasetVisibility(pairedIdx, !visible);
+            ci.update();
+          }
+        },
+        tooltip: {
+          backgroundColor: '#1a1a1a', padding: 12,
+          titleFont: { family: "'JetBrains Mono'", size: 12 },
+          bodyFont: { family: "'JetBrains Mono'", size: 11 },
+          callbacks: {
+            title: (items) => items[0].label,
+            label: (c) => {
+              if (c.dataset.label === '同比 %') {
+                return c.parsed.y == null ? null : '同比: ' + c.parsed.y.toFixed(1) + '%';
+              }
+              const year = c.dataset.stack === 'y25' ? '2025' : '2026';
+              const name = c.dataset.label.replace(' (2026)', '');
+              return year + ' · ' + name + ': ' + fmt(c.parsed.y);
+            },
+            footer: (items) => {
+              let s25 = 0, s26 = 0;
+              items.forEach(it => {
+                if (it.dataset.label === '同比 %') return;
+                if (it.dataset.stack === 'y25') s25 += it.parsed.y;
+                else if (it.dataset.stack === 'y26') s26 += it.parsed.y;
+              });
+              return '2025 合计: ' + fmt(s25) + '\n2026 合计: ' + fmt(s26);
+            }
+          }
+        }
+      },
+      scales: {
+        x: {
+          stacked: true,
+          grid: { display: false },
+          ticks: { font: { family: "'JetBrains Mono'", size: 10 } }
+        },
+        y: {
+          stacked: true,
+          beginAtZero: true,
+          title: { display: true, text: '搜索量', font: { family: "'JetBrains Mono'", size: 11 } },
+          grid: { color: 'rgba(0,0,0,0.05)' },
+          ticks: { font: { family: "'JetBrains Mono'" } }
+        },
+        y1: {
+          position: 'right',
+          title: { display: true, text: '同比 %', font: { family: "'JetBrains Mono'", size: 11 } },
+          grid: { drawOnChartArea: false },
+          ticks: { font: { family: "'JetBrains Mono'" }, callback: v => v + '%' }
+        }
+      }
+    }
+  });
+}
+
+// =====================================================================
+// FILTER ACTION BUTTONS (chip select/none/top5)
+// =====================================================================
+document.querySelectorAll('.filter-actions button[data-act]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.target;
+    const act = btn.dataset.act;
+    const key = platformOf(target);
+    const d = DATA[key];
+    if (act === 'all') SEL[target] = new Set(d.models);
+    else if (act === 'none') SEL[target] = new Set();
+    else if (act === 'top5') SEL[target] = new Set(computeTopModels(key, 5));
+    setChipState(target);
+    if (target.endsWith('-stack')) updateStackChart(key);
+    else updateYoyChart(key);
+  });
+});
+
+// =====================================================================
+// RANGE BUTTONS (last 12 / last 4 / all)
+// =====================================================================
+document.querySelectorAll('button[data-range]').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const target = btn.dataset.target;
+    const r = btn.dataset.range;
+    const key = platformOf(target);
+    const overlaps = getOverlapWeeks(key);
+    const startSel = document.getElementById(target + '-start');
+    const endSel = document.getElementById(target + '-end');
+
+    clearRangeButtonActive(target);
+    btn.classList.add('active');
+
+    if (r === 'all') {
+      YOY_RANGE[target] = null;
+      startSel.value = overlaps[0].w;
+      endSel.value = overlaps[overlaps.length - 1].w;
+    } else {
+      const n = +r;
+      const slice = overlaps.slice(-n);
+      YOY_RANGE[target] = { start: slice[0].w, end: slice[slice.length - 1].w };
+      startSel.value = slice[0].w;
+      endSel.value = slice[slice.length - 1].w;
+    }
+    updateYoyChart(key);
+  });
+});
+
+// =====================================================================
+// INIT
+// =====================================================================
+['jd','tm'].forEach(key => {
+  const top5 = computeTopModels(key, 5);
+  SEL[key + '-stack'] = new Set(top5);
+  SEL[key + '-yoy'] = new Set(top5);
+  renderChips(key + '-stack');
+  renderChips(key + '-yoy');
+  populateYoyRangeSelects(key);
+  updateStackChart(key);
+  updateYoyChart(key);
+});
+</script>
+</body>
+</html>
